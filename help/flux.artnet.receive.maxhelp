@@ -1,682 +1,684 @@
 {
-	"patcher": {
-		"fileversion": 1,
-		"appversion": {
-			"major": 8,
-			"minor": 2,
-			"revision": 0,
-			"architecture": "arm64",
-			"modernui": 1
-		},
-		"rect": [
-			63.0,
-			104.0,
-			720.0,
-			650.0
-		],
-		"bglocked": 0,
-		"openinpresentation": 0,
-		"default_fontsize": 12.0,
-		"default_fontface": 0,
-		"default_fontname": "Lato Light",
-		"gridonopen": 1,
-		"gridsize": [
-			5.0,
-			5.0
-		],
-		"gridsnaponopen": 2,
-		"objectsnaponopen": 0,
-		"statusbarvisible": 2,
-		"toolbarvisible": 1,
-		"lefttoolbarpinned": 2,
-		"toptoolbarpinned": 2,
-		"righttoolbarpinned": 2,
-		"bottomtoolbarpinned": 2,
-		"toolbars_unpinned_last_save": 15,
-		"tallnewobj": 0,
-		"boxanimatetime": 200,
-		"enablehscroll": 1,
-		"enablevscroll": 1,
-		"devicewidth": 0.0,
-		"description": "",
-		"digest": "",
-		"tags": "",
-		"style": "tap",
-		"subpatcher_template": "tap.template",
-		"boxes": [
-			{
-				"box": {
-					"id": "title",
-					"maxclass": "comment",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"patching_rect": [
-						20.0,
-						20.0,
-						660.0,
-						30.0
-					],
-					"text": "flux.artnet.receive \u2014 Art-Net DMX receiver",
-					"fontsize": 18.0
-				}
-			},
-			{
-				"box": {
-					"id": "intro",
-					"maxclass": "comment",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"patching_rect": [
-						20.0,
-						55.0,
-						660.0,
-						40.0
-					],
-					"text": "Receives Art-Net ArtDmx packets. One outlet is created per @universes entry, in list order.\nEach outlet emits a plain list of exactly 512 zero-based channel values.\nblackout 1 outputs zeros while still tracking input; blackout 0 restores the latest frames.\nErrors print to the Max console by default; @quiet 1 suppresses them.",
-					"fontsize": 12.0
-				}
-			},
-			{
-				"box": {
-					"id": "ex1",
-					"maxclass": "comment",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"patching_rect": [
-						20.0,
-						110.0,
-						660.0,
-						35.0
-					],
-					"text": "1. Single universe: connect an Art-Net sender to the same port and watch the list length and first channels.",
-					"fontsize": 14.0
-				}
-			},
-			{
-				"box": {
-					"id": "receiver",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 1,
-					"outlettype": [
-						"list"
-					],
-					"patching_rect": [
-						40.0,
-						155.0,
-						300.0,
-						23.0
-					],
-					"text": "flux.artnet.receive @universes 0"
-				}
-			},
-			{
-				"box": {
-					"id": "slice",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 1,
-					"outlettype": [
-						""
-					],
-					"patching_rect": [
-						40.0,
-						205.0,
-						130.0,
-						23.0
-					],
-					"text": "zl slice 4"
-				}
-			},
-			{
-				"box": {
-					"id": "print-slice",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"outlettype": [],
-					"patching_rect": [
-						40.0,
-						240.0,
-						120.0,
-						23.0
-					],
-					"text": "print first-4"
-				}
-			},
-			{
-				"box": {
-					"id": "length",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 1,
-					"outlettype": [
-						""
-					],
-					"patching_rect": [
-						260.0,
-						205.0,
-						90.0,
-						23.0
-					],
-					"text": "zl len"
-				}
-			},
-			{
-				"box": {
-					"id": "print-length",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"outlettype": [],
-					"patching_rect": [
-						260.0,
-						240.0,
-						110.0,
-						23.0
-					],
-					"text": "print length"
-				}
-			},
-			{
-				"box": {
-					"id": "ex1-note",
-					"maxclass": "comment",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"patching_rect": [
-						40.0,
-						275.0,
-						560.0,
-						40.0
-					],
-					"text": "Default @framerate 0 emits only when the stored 512-channel frame changes.\nbang emits the current frame immediately, including the initial zero frame.\nSet @floatoutput 1 to emit normalized floats 0.0-1.0 instead of integers.",
-					"fontsize": 12.0
-				}
-			},
-			{
-				"box": {
-					"id": "ex2",
-					"maxclass": "comment",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"patching_rect": [
-						20.0,
-						340.0,
-						660.0,
-						35.0
-					],
-					"text": "2. Multiple universes and outlets: outlet 0 = Port-Address 1, outlet 1 = Port-Address 2, outlet 2 = Port-Address 4.",
-					"fontsize": 14.0
-				}
-			},
-			{
-				"box": {
-					"id": "receiver2",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 3,
-					"outlettype": [
-						"list",
-						"list",
-						"list"
-					],
-					"patching_rect": [
-						40.0,
-						385.0,
-						260.0,
-						23.0
-					],
-					"text": "flux.artnet.receive @universes 1 2 4"
-				}
-			},
-			{
-				"box": {
-					"id": "len0",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 1,
-					"outlettype": [
-						""
-					],
-					"patching_rect": [
-						40.0,
-						435.0,
-						80.0,
-						23.0
-					],
-					"text": "zl len"
-				}
-			},
-			{
-				"box": {
-					"id": "len1",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 1,
-					"outlettype": [
-						""
-					],
-					"patching_rect": [
-						140.0,
-						435.0,
-						80.0,
-						23.0
-					],
-					"text": "zl len"
-				}
-			},
-			{
-				"box": {
-					"id": "len2",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 1,
-					"outlettype": [
-						""
-					],
-					"patching_rect": [
-						240.0,
-						435.0,
-						80.0,
-						23.0
-					],
-					"text": "zl len"
-				}
-			},
-			{
-				"box": {
-					"id": "print0",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"outlettype": [],
-					"patching_rect": [
-						40.0,
-						470.0,
-						130.0,
-						23.0
-					],
-					"text": "print universe-1"
-				}
-			},
-			{
-				"box": {
-					"id": "print1",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"outlettype": [],
-					"patching_rect": [
-						140.0,
-						470.0,
-						130.0,
-						23.0
-					],
-					"text": "print universe-2"
-				}
-			},
-			{
-				"box": {
-					"id": "print2",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"outlettype": [],
-					"patching_rect": [
-						240.0,
-						470.0,
-						130.0,
-						23.0
-					],
-					"text": "print universe-4"
-				}
-			},
-			{
-				"box": {
-					"id": "ex2-note",
-					"maxclass": "comment",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"patching_rect": [
-						340.0,
-						400.0,
-						340.0,
-						50.0
-					],
-					"text": "The universe index is a position in @universes, not the raw Port-Address.\nOutlets are typed as list; outlet i corresponds to @universes[i].\n@universes is creation-time only for the receiver: recreate the object to change outlets.",
-					"fontsize": 12.0
-				}
-			},
-			{
-				"box": {
-					"id": "ex3",
-					"maxclass": "comment",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"patching_rect": [
-						20.0,
-						520.0,
-						660.0,
-						25.0
-					],
-					"text": "3. Fixed-rate mode: set @framerate to a positive value to emit the latest frame for every universe at that rate.",
-					"fontsize": 14.0
-				}
-			},
-			{
-				"box": {
-					"id": "receiver3",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 1,
-					"outlettype": [
-						"list"
-					],
-					"patching_rect": [
-						40.0,
-						555.0,
-						430.0,
-						23.0
-					],
-					"text": "flux.artnet.receive @universes 0 @framerate 30"
-				}
-			},
-			{
-				"box": {
-					"id": "gate3",
-					"maxclass": "newobj",
-					"numinlets": 2,
-					"numoutlets": 1,
-					"outlettype": [
-						""
-					],
-					"patching_rect": [
-						40.0,
-						595.0,
-						80.0,
-						23.0
-					],
-					"text": "gate 1"
-				}
-			},
-			{
-				"box": {
-					"id": "len3",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 1,
-					"outlettype": [
-						""
-					],
-					"patching_rect": [
-						140.0,
-						595.0,
-						80.0,
-						23.0
-					],
-					"text": "zl len"
-				}
-			},
-			{
-				"box": {
-					"id": "print3",
-					"maxclass": "newobj",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"outlettype": [],
-					"patching_rect": [
-						140.0,
-						630.0,
-						130.0,
-						23.0
-					],
-					"text": "print rate-length"
-				}
-			},
-			{
-				"box": {
-					"id": "toggle3",
-					"maxclass": "toggle",
-					"numinlets": 1,
-					"numoutlets": 1,
-					"outlettype": [
-						"int"
-					],
-					"patching_rect": [
-						40.0,
-						630.0,
-						24.0,
-						24.0
-					]
-				}
-			},
-			{
-				"box": {
-					"id": "ex3-note",
-					"maxclass": "comment",
-					"numinlets": 1,
-					"numoutlets": 0,
-					"patching_rect": [
-						240.0,
-						620.0,
-						360.0,
-						30.0
-					],
-					"text": "A positive @framerate emits continuously. Raise the toggle to pass the output to the length monitor.",
-					"fontsize": 12.0
-				}
-			}
-		],
-		"lines": [
-			{
-				"patchline": {
-					"source": [
-						"receiver",
-						0
-					],
-					"destination": [
-						"slice",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"receiver",
-						0
-					],
-					"destination": [
-						"length",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"slice",
-						0
-					],
-					"destination": [
-						"print-slice",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"length",
-						0
-					],
-					"destination": [
-						"print-length",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"receiver2",
-						0
-					],
-					"destination": [
-						"len0",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"receiver2",
-						1
-					],
-					"destination": [
-						"len1",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"receiver2",
-						2
-					],
-					"destination": [
-						"len2",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"len0",
-						0
-					],
-					"destination": [
-						"print0",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"len1",
-						0
-					],
-					"destination": [
-						"print1",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"len2",
-						0
-					],
-					"destination": [
-						"print2",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"receiver3",
-						0
-					],
-					"destination": [
-						"gate3",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"gate3",
-						0
-					],
-					"destination": [
-						"len3",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"len3",
-						0
-					],
-					"destination": [
-						"print3",
-						0
-					]
-				}
-			},
-			{
-				"patchline": {
-					"source": [
-						"toggle3",
-						0
-					],
-					"destination": [
-						"gate3",
-						1
-					]
-				}
-			}
-		],
-		"dependency_cache": [
-			{
-				"name": "flux.artnet.receive.mxo",
-				"type": "iLaX"
-			}
-		],
-		"autosave": 0,
-		"styles": [
-			{
-				"name": "tap",
-				"default": {
-					"fontname": [
-						"Lato Light"
-					]
-				},
-				"parentstyle": "",
-				"multi": 0
-			}
-		],
-		"bgfillcolor_type": "gradient",
-		"bgfillcolor_color1": [
-			0.376471,
-			0.384314,
-			0.4,
-			1.0
-		],
-		"bgfillcolor_color2": [
-			0.290196,
-			0.309804,
-			0.301961,
-			1.0
-		],
-		"bgfillcolor_color": [
-			0.290196,
-			0.309804,
-			0.301961,
-			1.0
-		],
-		"bgfillcolor_angle": 270.0,
-		"bgfillcolor_proportion": 0.39
-	}
+    "patcher": {
+        "fileversion": 1,
+        "appversion": {
+            "major": 9,
+            "minor": 2,
+            "revision": 0,
+            "architecture": "x64",
+            "modernui": 1
+        },
+        "classnamespace": "box",
+        "rect": [ 100.0, 100.0, 786.0, 694.0 ],
+        "gridsize": [ 5.0, 5.0 ],
+        "gridsnaponopen": 2,
+        "objectsnaponopen": 0,
+        "showrootpatcherontab": 0,
+        "showontab": 0,
+        "boxes": [
+            {
+                "box": {
+                    "id": "obj-1",
+                    "maxclass": "newobj",
+                    "numinlets": 0,
+                    "numoutlets": 0,
+                    "patcher": {
+                        "fileversion": 1,
+                        "appversion": {
+                            "major": 9,
+                            "minor": 2,
+                            "revision": 0,
+                            "architecture": "x64",
+                            "modernui": 1
+                        },
+                        "classnamespace": "box",
+                        "rect": [ 0.0, 26.0, 786.0, 668.0 ],
+                        "gridsize": [ 5.0, 5.0 ],
+                        "gridsnaponopen": 2,
+                        "objectsnaponopen": 0,
+                        "showontab": 1,
+                        "boxes": [],
+                        "lines": [],
+                        "styles": [
+                            {
+                                "name": "tap",
+                                "default": {
+                                    "fontname": [ "Lato Light" ]
+                                },
+                                "parentstyle": "",
+                                "multi": 0
+                            }
+                        ]
+                    },
+                    "patching_rect": [ 90.0, 180.0, 27.0, 22.0 ],
+                    "text": "p ?"
+                }
+            },
+            {
+                "box": {
+                    "id": "obj-27",
+                    "maxclass": "newobj",
+                    "numinlets": 0,
+                    "numoutlets": 0,
+                    "patcher": {
+                        "fileversion": 1,
+                        "appversion": {
+                            "major": 9,
+                            "minor": 2,
+                            "revision": 0,
+                            "architecture": "x64",
+                            "modernui": 1
+                        },
+                        "classnamespace": "box",
+                        "rect": [ 100.0, 126.0, 786.0, 668.0 ],
+                        "gridsize": [ 5.0, 5.0 ],
+                        "gridsnaponopen": 2,
+                        "objectsnaponopen": 0,
+                        "showontab": 1,
+                        "boxes": [
+                            {
+                                "box": {
+                                    "bubble": 1,
+                                    "bubbleside": 0,
+                                    "fontname": "Arial",
+                                    "fontsize": 13.0,
+                                    "id": "obj-66",
+                                    "maxclass": "comment",
+                                    "numinlets": 1,
+                                    "numoutlets": 0,
+                                    "patching_rect": [ 557.0, 283.0, 130.0, 40.0 ],
+                                    "text": "send some values"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-55",
+                                    "maxclass": "number",
+                                    "maximum": 300,
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 14.0, 385.0, 50.0, 22.0 ],
+                                    "varname": "number"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-50",
+                                    "maxclass": "newobj",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "" ],
+                                    "patching_rect": [ 14.0, 412.0, 107.0, 22.0 ],
+                                    "text": "prepend framerate"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-49",
+                                    "maxclass": "number",
+                                    "maximum": 255,
+                                    "minimum": 0,
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 606.0, 389.0, 50.0, 22.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-48",
+                                    "maxclass": "number",
+                                    "maximum": 255,
+                                    "minimum": 0,
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 549.0, 389.0, 50.0, 22.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-47",
+                                    "maxclass": "number",
+                                    "maximum": 255,
+                                    "minimum": 0,
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 492.0, 389.0, 50.0, 22.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-44",
+                                    "maxclass": "message",
+                                    "numinlets": 2,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "" ],
+                                    "patching_rect": [ 562.0, 434.0, 77.0, 22.0 ],
+                                    "text": "channel 2 $1"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-39",
+                                    "maxclass": "newobj",
+                                    "numinlets": 2,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "" ],
+                                    "patching_rect": [ 492.0, 434.0, 48.0, 22.0 ],
+                                    "text": "pak 0 0"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-28",
+                                    "maxclass": "newobj",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "bang", "" ],
+                                    "patching_rect": [ 492.0, 471.0, 259.0, 22.0 ],
+                                    "text": "flux.artnet.send @universes 7 @host 127.0.0.1"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-24",
+                                    "maxclass": "toggle",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "int" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 55.0, 158.0, 24.0, 24.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-22",
+                                    "maxclass": "message",
+                                    "numinlets": 2,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "" ],
+                                    "patching_rect": [ 55.0, 186.0, 70.0, 22.0 ],
+                                    "text": "blackout $1"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-20",
+                                    "maxclass": "button",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 110.0, 487.0, 24.0, 24.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-17",
+                                    "maxclass": "button",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 38.0, 487.0, 24.0, 24.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-9",
+                                    "maxclass": "button",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 110.0, 263.0, 24.0, 24.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-7",
+                                    "maxclass": "button",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 38.0, 263.0, 24.0, 24.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "contdata": 1,
+                                    "id": "obj-18",
+                                    "maxclass": "multislider",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 492.0, 175.0, 260.0, 100.0 ],
+                                    "setminmax": [ 0.0, 1.0 ],
+                                    "size": 1536
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-19",
+                                    "maxclass": "newobj",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "bang", "" ],
+                                    "patching_rect": [ 492.0, 343.0, 279.0, 22.0 ],
+                                    "text": "flux.artnet.send @universes 4 5 6 @host 127.0.0.1"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-14",
+                                    "linecount": 5,
+                                    "maxclass": "comment",
+                                    "numinlets": 1,
+                                    "numoutlets": 0,
+                                    "patching_rect": [ 285.0, 464.0, 160.0, 74.0 ],
+                                    "text": "with framerate at 0, outlets only send values on change. If set, frames are output at the given frames/sec."
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-13",
+                                    "linecount": 3,
+                                    "maxclass": "comment",
+                                    "numinlets": 1,
+                                    "numoutlets": 0,
+                                    "patching_rect": [ 285.0, 412.0, 160.0, 47.0 ],
+                                    "text": "floatoutput 1 scales the channel value range from 0.-1."
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-12",
+                                    "linecount": 5,
+                                    "maxclass": "comment",
+                                    "numinlets": 1,
+                                    "numoutlets": 0,
+                                    "patching_rect": [ 284.0, 225.0, 160.0, 74.0 ],
+                                    "text": "you specify which universe(s) to listen for. The object creates an outlet for each, outputting 512 channels"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-11",
+                                    "linecount": 2,
+                                    "maxclass": "comment",
+                                    "numinlets": 1,
+                                    "numoutlets": 0,
+                                    "patching_rect": [ 285.0, 181.0, 157.0, 33.0 ],
+                                    "text": "sending a bang outputs the current frame"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "format": 6,
+                                    "id": "obj-10",
+                                    "maxclass": "flonum",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 224.0, 605.0, 50.0, 22.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "format": 6,
+                                    "id": "obj-8",
+                                    "maxclass": "flonum",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 190.0, 573.0, 50.0, 22.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "format": 6,
+                                    "id": "obj-5",
+                                    "maxclass": "flonum",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 156.0, 544.0, 50.0, 22.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-3",
+                                    "maxclass": "newobj",
+                                    "numinlets": 1,
+                                    "numoutlets": 3,
+                                    "outlettype": [ "float", "float", "float" ],
+                                    "patching_rect": [ 156.0, 515.0, 87.0, 22.0 ],
+                                    "text": "unpack 0. 0. 0."
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-73",
+                                    "maxclass": "button",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "bang" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 14.0, 158.0, 24.0, 24.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "contdata": 1,
+                                    "id": "obj-58",
+                                    "maxclass": "multislider",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 14.0, 515.0, 126.0, 77.0 ],
+                                    "setminmax": [ 0.0, 1.0 ],
+                                    "size": 512
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-59",
+                                    "linecount": 2,
+                                    "maxclass": "newobj",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "list", "list" ],
+                                    "patching_rect": [ 14.0, 439.0, 193.0, 35.0 ],
+                                    "text": "flux.artnet.receive @universes 5 7 @framerate 3 @floatoutput 1"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "contdata": 1,
+                                    "id": "obj-60",
+                                    "maxclass": "multislider",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 14.0, 300.0, 126.0, 77.0 ],
+                                    "setminmax": [ 0.0, 255.0 ],
+                                    "settype": 0,
+                                    "size": 512
+                                }
+                            },
+                            {
+                                "box": {
+                                    "contdata": 1,
+                                    "id": "obj-61",
+                                    "maxclass": "multislider",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "", "" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 145.0, 300.0, 126.0, 77.0 ],
+                                    "setminmax": [ 0.0, 255.0 ],
+                                    "settype": 0,
+                                    "size": 512
+                                }
+                            },
+                            {
+                                "box": {
+                                    "id": "obj-62",
+                                    "maxclass": "newobj",
+                                    "numinlets": 1,
+                                    "numoutlets": 2,
+                                    "outlettype": [ "list", "list" ],
+                                    "patching_rect": [ 14.0, 225.0, 190.0, 22.0 ],
+                                    "text": "flux.artnet.receive @universes 4 6"
+                                }
+                            },
+                            {
+                                "box": {
+                                    "border": 0,
+                                    "filename": "helpdetails.js",
+                                    "id": "obj-2",
+                                    "ignoreclick": 1,
+                                    "jsarguments": [ "flux.artnet.receive" ],
+                                    "maxclass": "jsui",
+                                    "numinlets": 1,
+                                    "numoutlets": 1,
+                                    "outlettype": [ "" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 10.0, 10.0, 620.0, 125.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "background": 1,
+                                    "bgcolor": [ 0.9, 0.65, 0.05, 1.0 ],
+                                    "hint": "",
+                                    "id": "obj-69",
+                                    "ignoreclick": 1,
+                                    "legacytextcolor": 1,
+                                    "maxclass": "textbutton",
+                                    "numinlets": 1,
+                                    "numoutlets": 3,
+                                    "outlettype": [ "", "", "int" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 247.0, 574.0, 20.0, 20.0 ],
+                                    "rounded": 60.0,
+                                    "saved_attribute_attributes": {
+                                        "bgcolor": {
+                                            "expression": "themecolor.lesson_step_circle"
+                                        }
+                                    },
+                                    "text": "2",
+                                    "textcolor": [ 0.34902, 0.34902, 0.34902, 1.0 ]
+                                }
+                            },
+                            {
+                                "box": {
+                                    "background": 1,
+                                    "bgcolor": [ 0.9, 0.65, 0.05, 1.0 ],
+                                    "hint": "",
+                                    "id": "obj-67",
+                                    "ignoreclick": 1,
+                                    "legacytextcolor": 1,
+                                    "maxclass": "textbutton",
+                                    "numinlets": 1,
+                                    "numoutlets": 3,
+                                    "outlettype": [ "", "", "int" ],
+                                    "parameter_enable": 0,
+                                    "patching_rect": [ 672.0, 390.0, 20.0, 20.0 ],
+                                    "rounded": 60.0,
+                                    "saved_attribute_attributes": {
+                                        "bgcolor": {
+                                            "expression": "themecolor.lesson_step_circle"
+                                        }
+                                    },
+                                    "text": "1",
+                                    "textcolor": [ 0.34902, 0.34902, 0.34902, 1.0 ]
+                                }
+                            }
+                        ],
+                        "lines": [
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-19", 0 ],
+                                    "source": [ "obj-18", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-62", 0 ],
+                                    "source": [ "obj-22", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-22", 0 ],
+                                    "source": [ "obj-24", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-10", 0 ],
+                                    "source": [ "obj-3", 2 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-5", 0 ],
+                                    "source": [ "obj-3", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-8", 0 ],
+                                    "source": [ "obj-3", 1 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-28", 0 ],
+                                    "source": [ "obj-39", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-28", 0 ],
+                                    "source": [ "obj-44", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-39", 0 ],
+                                    "source": [ "obj-47", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-39", 1 ],
+                                    "source": [ "obj-48", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-44", 0 ],
+                                    "source": [ "obj-49", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-59", 0 ],
+                                    "source": [ "obj-50", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-50", 0 ],
+                                    "source": [ "obj-55", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-17", 0 ],
+                                    "order": 0,
+                                    "source": [ "obj-59", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-20", 0 ],
+                                    "order": 1,
+                                    "source": [ "obj-59", 1 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-3", 0 ],
+                                    "order": 0,
+                                    "source": [ "obj-59", 1 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-58", 0 ],
+                                    "order": 1,
+                                    "source": [ "obj-59", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-60", 0 ],
+                                    "order": 1,
+                                    "source": [ "obj-62", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-61", 0 ],
+                                    "order": 0,
+                                    "source": [ "obj-62", 1 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-7", 0 ],
+                                    "order": 0,
+                                    "source": [ "obj-62", 0 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-9", 0 ],
+                                    "order": 1,
+                                    "source": [ "obj-62", 1 ]
+                                }
+                            },
+                            {
+                                "patchline": {
+                                    "destination": [ "obj-62", 0 ],
+                                    "source": [ "obj-73", 0 ]
+                                }
+                            }
+                        ],
+                        "styles": [
+                            {
+                                "name": "tap",
+                                "default": {
+                                    "fontname": [ "Lato Light" ]
+                                },
+                                "parentstyle": "",
+                                "multi": 0
+                            }
+                        ]
+                    },
+                    "patching_rect": [ 40.0, 105.0, 49.0, 22.0 ],
+                    "text": "p basic"
+                }
+            }
+        ],
+        "lines": [],
+        "autosave": 0,
+        "styles": [
+            {
+                "name": "tap",
+                "default": {
+                    "fontname": [ "Lato Light" ]
+                },
+                "parentstyle": "",
+                "multi": 0
+            }
+        ]
+    }
 }
