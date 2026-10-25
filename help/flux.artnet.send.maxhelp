@@ -72,7 +72,7 @@
 						660.0,
 						40.0
 					],
-					"text": "Sends DMX channel values as Art-Net ArtDmx packets. Channels are zero-based (0-511).\n@universes is an ordered list of Port-Addresses; message universe indices select entries in that list.\nIntegers are DMX 0-255; normalized floats 0.0-1.0 are also accepted (clipped and rounded).\nLeft outlet: bang for every transmitted universe frame. Right outlet: error or warning <message>.\nLists longer than the remaining @universes capacity are truncated with a warning.\nErrors and warnings print to the Max console by default; @quiet 1 suppresses the console copy.",
+					"text": "Sends DMX channel values as Art-Net ArtDmx packets. Channels are zero-based (0-511).\n@universes is an ordered list of Port-Addresses; message universe indices select entries in that list.\nIntegers are DMX 0-255; normalized floats 0.0-1.0 are also accepted (clipped and rounded).\nLeft outlet: bang for every transmitted universe frame. Right outlet: error or warning <message>.\nLists longer than the remaining @universes capacity are truncated with a warning.\nblackout 1 sends zeros on every universe; blackout 0 restores the retained frames.\nErrors and warnings print to the Max console by default; @quiet 1 suppresses the console copy.",
 					"fontsize": 12.0
 				}
 			},

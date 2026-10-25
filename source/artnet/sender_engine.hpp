@@ -202,6 +202,16 @@ class SenderEngine
         m_transport = std::move(transport);
     }
 
+    void set_blackout(bool enabled)
+    {
+        m_blackout = enabled;
+    }
+
+    bool blackout() const
+    {
+        return m_blackout;
+    }
+
     bool set_universes(const std::vector<int>& universes, std::string& error)
     {
         if (!m_state.set_universes(universes, error))
@@ -319,7 +329,8 @@ class SenderEngine
             return false;
         }
 
-        const auto& frame = m_state.frame(index);
+        static const DmxFrame silence{};
+        const auto& frame = m_blackout ? silence : m_state.frame(index);
         const auto packet = encode_artdmx(m_state.universes()[index], frame.data(), frame.size(), m_state.next_sequence(index));
         if (packet.empty()) {
             error = "internal error: failed to encode ArtDmx packet";
@@ -331,6 +342,7 @@ class SenderEngine
     SenderState m_state;
     Transport m_transport;
     std::set<int> m_pending_silent;
+    bool m_blackout{false};
 };
 
 } // namespace flux::artnet

@@ -66,6 +66,11 @@
 			<description>Write channel values from offset 0 of universe index 0. Integers are 0-255; floats are normalized 0.0-1.0. </description>
 		</method>
 
+		<method name='blackout'>
+			<digest>Temporarily send zeros on all universes</digest>
+			<description>blackout 1 immediately sends a zero frame for every configured universe and keeps sending zeros while active. Stored values are retained and incoming updates still update them. blackout 0 immediately sends the retained frames and resumes normal transmission.</description>
+		</method>
+
 	</methodlist>
 
 

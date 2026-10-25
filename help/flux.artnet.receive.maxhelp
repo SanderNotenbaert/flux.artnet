@@ -72,7 +72,7 @@
 						660.0,
 						40.0
 					],
-					"text": "Receives Art-Net ArtDmx packets. One outlet is created per @universes entry, in list order.\nEach outlet emits a plain list of exactly 512 zero-based channel values.\nErrors print to the Max console by default; @quiet 1 suppresses them.",
+					"text": "Receives Art-Net ArtDmx packets. One outlet is created per @universes entry, in list order.\nEach outlet emits a plain list of exactly 512 zero-based channel values.\nblackout 1 outputs zeros while still tracking input; blackout 0 restores the latest frames.\nErrors print to the Max console by default; @quiet 1 suppresses them.",
 					"fontsize": 12.0
 				}
 			},

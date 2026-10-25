@@ -33,7 +33,12 @@
 
 		<method name='bang'>
 			<digest>Output the current frame for every configured universe immediately</digest>
-			<description>Output the current frame for every configured universe immediately. </description>
+			<description>Output the current frame for every configured universe immediately. During blackout, bang outputs zeros. </description>
+		</method>
+
+		<method name='blackout'>
+			<digest>Temporarily black out the outlets</digest>
+			<description>blackout 1 immediately outputs zeros on every outlet. The receiver keeps listening and tracking incoming data, but suppresses live output. In fixed-rate mode it outputs zeros at @framerate; in change mode it outputs zeros once and bang outputs zeros. blackout 0 immediately outputs the latest stored frames and resumes normal output.</description>
 		</method>
 
 	</methodlist>

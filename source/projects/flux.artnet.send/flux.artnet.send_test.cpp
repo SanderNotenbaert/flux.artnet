@@ -476,6 +476,9 @@ SCENARIO("artnet.send exposes the documented attributes and message forms") {
             REQUIRE((object.host == symbol("")));
             REQUIRE((object.framerate == 0.0));
             REQUIRE((object.quiet == 0));
+            REQUIRE(object.outlets().size() == 2);
+            REQUIRE(object.outlets()[0]->description() == "bang for every universe frame transmitted");
+            REQUIRE(object.outlets()[1]->description() == "error or warning <message> on invalid input, truncation or network failure");
         }
 
         THEN("invalid attributes leave the previous values intact") {
@@ -659,6 +662,62 @@ SCENARIO("artnet.send exposes the documented attributes and message forms") {
                 auto* status = c74::max::object_getoutput(object, 1);
                 REQUIRE(status->size() == 1);
                 REQUIRE(((*status)[0][0] == symbol("error")));
+            }
+        }
+
+        WHEN("blackout is enabled") {
+            object.list_message(atoms{10, 20});
+            capture.packets.clear();
+            object.blackout_message(atoms{1});
+
+            THEN("zero frames are transmitted for every configured universe") {
+                REQUIRE(capture.packets.size() == 1);
+                const auto packet = decode_packet(capture.packets[0]);
+                REQUIRE(packet.length == 512);
+                for (std::size_t channel = 0; channel < 512; ++channel)
+                    REQUIRE(packet.data[channel] == 0);
+                REQUIRE(artnet_send_test_access::engine(object).state().frame(0)[0] == 10);
+                REQUIRE(artnet_send_test_access::engine(object).state().frame(0)[1] == 20);
+            }
+        }
+
+        WHEN("blackout is enabled and a new value arrives") {
+            object.list_message(atoms{10, 20});
+            object.blackout_message(atoms{1});
+            capture.packets.clear();
+            object.list_message(atoms{30});
+
+            THEN("the transmitted frame stays zero but the stored value is updated") {
+                REQUIRE(capture.packets.size() == 1);
+                REQUIRE(decode_packet(capture.packets[0]).data[0] == 0);
+                REQUIRE(artnet_send_test_access::engine(object).state().frame(0)[0] == 30);
+            }
+        }
+
+        WHEN("blackout is released") {
+            object.list_message(atoms{10, 20});
+            object.blackout_message(atoms{1});
+            capture.packets.clear();
+            object.blackout_message(atoms{0});
+
+            THEN("the retained frame is transmitted immediately") {
+                REQUIRE(capture.packets.size() == 1);
+                REQUIRE(decode_packet(capture.packets[0]).data[0] == 10);
+                REQUIRE(decode_packet(capture.packets[0]).data[1] == 20);
+            }
+        }
+
+        WHEN("blackout is enabled with multiple universes") {
+            object.universes.set(atoms{1, 2});
+            capture.packets.clear();
+            object.blackout_message(atoms{1});
+
+            THEN("every configured universe receives a zero frame") {
+                REQUIRE(capture.packets.size() == 2);
+                REQUIRE(decode_packet(capture.packets[0]).port_address == 1);
+                REQUIRE(decode_packet(capture.packets[1]).port_address == 2);
+                REQUIRE(decode_packet(capture.packets[0]).data[0] == 0);
+                REQUIRE(decode_packet(capture.packets[1]).data[0] == 0);
             }
         }
 

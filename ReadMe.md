@@ -136,6 +136,10 @@ A `set` message updates the stored frame without transmitting immediately.
 
 `bang` immediately sends the current full frame for every configured universe, regardless of `@framerate`. It does not change the configured rate or clear stored channel values.
 
+### `blackout`
+
+`blackout 1` immediately sends a full zero frame for every configured universe and keeps transmitting zeros while active. Stored channel values are retained, and incoming updates continue to update them. `blackout 0` immediately sends the retained frames and resumes normal transmission. In scheduled mode, scheduled ticks continue with zeros while blacked out. The left outlet bangs for every zero frame.
+
 ### Transmission modes
 
 **Change-triggered (`@framerate 0`)**
@@ -207,6 +211,8 @@ One outlet is created for each entry in `@universes`, in list order. The first o
 
 Each outlet emits a plain list of exactly 512 integer values by default. With `@floatoutput 1`, it emits 512 normalized floats instead (`0.0`–`1.0`). The universe number is **not** prepended either way.
 
+Hovering over an outlet shows a hint such as `flux.artnet.receive: universe index 0 (Port-Address 1): 512 channel values`.
+
 ### Receiving behaviour
 
 * Only packets whose Port-Address is in `@universes` are processed.
@@ -215,6 +221,10 @@ Each outlet emits a plain list of exactly 512 integer values by default. With `@
 * Incoming channel data is compared with the stored frame. Identical frames do not change the stored state and do not trigger output in change mode.
 * Malformed or unrelated UDP datagrams are ignored safely.
 * Receivers for the same local port share a single UDP socket inside the package, so multiple receiver objects can listen on port 6454 at the same time.
+
+### `blackout`
+
+`blackout 1` immediately emits zeros on every outlet. The receiver keeps listening and updating its internal buffers, but live output is suppressed while blacked out. In fixed-rate mode it emits zeros at `@framerate`; in change mode the zeros are emitted once, and `bang` emits zeros. `blackout 0` immediately emits the latest stored frames and resumes normal output. This is a local output blackout; use `flux.artnet.send blackout 1` to black out physical fixtures.
 
 ### Short payloads
 

@@ -213,6 +213,8 @@ SCENARIO("artnet.receive exposes one outlet per universe and 512-value lists") {
             REQUIRE((object.framerate == 0.0));
             REQUIRE((object.floatoutput == 0));
             REQUIRE((object.quiet == 0));
+            REQUIRE(object.outlets().size() == 1);
+            REQUIRE(object.outlets()[0]->description() == "universe index 0 (Port-Address 0): 512 channel values");
         }
 
         THEN("invalid attributes leave the previous values intact") {
@@ -245,6 +247,10 @@ SCENARIO("artnet.receive exposes one outlet per universe and 512-value lists") {
             THEN("one outlet per universe is created") {
                 REQUIRE(artnet_receive_test_access::outlet_count(object) == 3);
                 REQUIRE((object.universes.get_atoms() == atoms{1, 2, 4}));
+                REQUIRE(object.outlets().size() == 3);
+                REQUIRE(object.outlets()[0]->description() == "universe index 0 (Port-Address 1): 512 channel values");
+                REQUIRE(object.outlets()[1]->description() == "universe index 1 (Port-Address 2): 512 channel values");
+                REQUIRE(object.outlets()[2]->description() == "universe index 2 (Port-Address 4): 512 channel values");
             }
 
             THEN("bang emits every outlet in configured order, including zero frames") {
@@ -319,6 +325,53 @@ SCENARIO("artnet.receive exposes one outlet per universe and 512-value lists") {
                 const auto& values = (*output)[1];
                 REQUIRE(values[0].type() == message_type::int_argument);
                 REQUIRE(static_cast<int>(values[0]) == 255);
+            }
+        }
+
+        WHEN("blackout is enabled") {
+            object.universes.set(atoms{1});
+            const auto state = artnet_receive_test_access::state(object);
+            REQUIRE(apply_values(*state, 1, {255, 128, 0, 0}, 1));
+
+            object.blackout_message(atoms{1});
+
+            THEN("every outlet emits zeros") {
+                REQUIRE(output_count(object, 0) == 1);
+                const auto values = output_values(object, 0);
+                REQUIRE(values.size() == 512);
+                REQUIRE(values[0] == 0);
+                REQUIRE(values[1] == 0);
+            }
+
+            THEN("incoming data is tracked but not emitted until blackout is released") {
+                REQUIRE(apply_values(*state, 1, {10, 20}, 2));
+                artnet_receive_test_access::poll_output(object);
+                REQUIRE(output_count(object, 0) == 1);
+
+                object.blackout_message(atoms{0});
+                REQUIRE(output_count(object, 0) == 2);
+                const auto values = output_values(object, 0, 1);
+                REQUIRE(values[0] == 10);
+                REQUIRE(values[1] == 20);
+            }
+
+            THEN("fixed-rate mode emits zeros every tick") {
+                object.framerate = 30.0;
+                artnet_receive_test_access::poll_output(object);
+                artnet_receive_test_access::poll_output(object);
+
+                REQUIRE(output_count(object, 0) == 3);
+                REQUIRE(output_values(object, 0, 2)[0] == 0);
+            }
+
+            THEN("floatoutput emits zero floats during blackout") {
+                object.floatoutput = 1;
+                object.blackout_message(atoms{1});
+
+                auto* output = c74::max::object_getoutput(object, 0);
+                const auto& values = (*output)[output->size() - 1];
+                REQUIRE(values[0].type() == message_type::float_argument);
+                REQUIRE(static_cast<double>(values[0]) == 0.0);
             }
         }
 

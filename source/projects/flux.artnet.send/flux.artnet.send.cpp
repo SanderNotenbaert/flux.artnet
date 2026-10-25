@@ -163,6 +163,24 @@ class artnet_send : public object<artnet_send> {
     };
 
 
+    message<> blackout_message { this, "blackout", "blackout 1 sends zeros on every configured universe; blackout 0 restores the retained frames.",
+        MIN_FUNCTION {
+            int value = -1;
+            if (args.size() != 1 || !atom_to_int(args[0], value) || (value != 0 && value != 1)) {
+                log_error("blackout expects 0 or 1");
+                return {};
+            }
+
+            m_engine.set_blackout(value == 1);
+
+            std::string error;
+            if (!m_engine.send_all(error))
+                log_error(error);
+            return {};
+        }
+    };
+
+
     artnet_send()
     {
         m_packet_sender = [this](const std::vector<std::uint8_t>& packet, std::string& error) {

@@ -104,7 +104,28 @@ class artnet_receive : public object<artnet_receive> {
 
     message<> bang { this, "bang", "Output the current frame for every configured universe immediately.",
         MIN_FUNCTION {
-            output_all();
+            if (m_blackout)
+                output_blackout();
+            else
+                output_all();
+            return {};
+        }
+    };
+
+
+    message<> blackout_message { this, "blackout", "blackout 1 outputs zeros on every outlet while received data continues to be tracked; blackout 0 restores the latest frames.",
+        MIN_FUNCTION {
+            int value = -1;
+            if (args.size() != 1 || !atom_to_int(args[0], value) || (value != 0 && value != 1)) {
+                log_error("blackout expects 0 or 1");
+                return {};
+            }
+
+            m_blackout = (value == 1);
+            if (m_blackout)
+                output_blackout();
+            else
+                output_all();
             return {};
         }
     };
@@ -154,6 +175,9 @@ class artnet_receive : public object<artnet_receive> {
             ReceiverNetworkService::instance().unsubscribe(m_subscription->port, m_subscription);
             m_subscription.reset();
         }
+
+        outlets().clear();
+        m_outlet_descriptions.clear();
     }
 
 
@@ -202,6 +226,7 @@ class artnet_receive : public object<artnet_receive> {
         }
 
         rebuild_outlets(values.size());
+        rebuild_outlet_descriptions(values);
         m_last_output_versions.assign(values.size(), 0);
         m_universes_configured = true;
         return atoms{ints_to_symbol(values)};
@@ -256,6 +281,24 @@ class artnet_receive : public object<artnet_receive> {
         if (!m_outlets.empty())
             return;
         m_outlets.push_back(static_cast<max::t_outlet*>(max::outlet_new(maxobj(), "list")));
+        if (m_outlet_descriptions.empty())
+            rebuild_outlet_descriptions({0});
+    }
+
+    /// Min uses its own outlet list for the Max assist/hint callback. The raw
+    /// Max outlets are created separately, so keep one lightweight Min outlet
+    /// object per universe purely to provide the hover hint.
+    void rebuild_outlet_descriptions(const std::vector<int>& universes)
+    {
+        outlets().clear();
+        m_outlet_descriptions.clear();
+        m_outlet_descriptions.reserve(universes.size());
+
+        for (std::size_t index = 0; index < universes.size(); ++index) {
+            const std::string description = "universe index " + std::to_string(index) + " (Port-Address "
+                                          + std::to_string(universes[index]) + "): 512 channel values";
+            m_outlet_descriptions.push_back(std::make_unique<outlet<>>(this, description, "list"));
+        }
     }
 
     /// Create one outlet per configured universe.
@@ -311,8 +354,21 @@ class artnet_receive : public object<artnet_receive> {
         }
     }
 
+    void output_blackout()
+    {
+        static const DmxFrame silence{};
+        for (std::size_t index = 0; index < m_outlets.size(); ++index)
+            emit_frame(index, silence);
+    }
+
     void poll_output()
     {
+        if (m_blackout) {
+            if (m_framerate > 0.0)
+                output_blackout();
+            return;
+        }
+
         if (m_last_output_versions.size() != m_state->universe_count())
             m_last_output_versions.assign(m_state->universe_count(), 0);
 
@@ -382,6 +438,7 @@ class artnet_receive : public object<artnet_receive> {
 
     std::shared_ptr<ReceiverState> m_state;
     std::vector<max::t_outlet*> m_outlets;
+    std::vector<std::unique_ptr<outlet<>>> m_outlet_descriptions;
     std::vector<std::uint64_t> m_last_output_versions;
     std::array<max::t_atom, kChannelCount> m_output_atoms{};
     std::shared_ptr<ReceiverSubscription> m_subscription;
@@ -389,6 +446,7 @@ class artnet_receive : public object<artnet_receive> {
     double m_framerate{0.0};
     bool m_started{false};
     bool m_universes_configured{false};
+    bool m_blackout{false};
 
     timer<timer_options::defer_delivery> m_startup_timer { this, MIN_FUNCTION {
         on_startup();
