@@ -25,8 +25,10 @@ inline constexpr int kMaxUniverse = 15;
 /// The Art-Net specification defines UDP port 6454 for all Art-Net traffic.
 inline constexpr std::uint16_t kDefaultPort = 6454;
 
-/// ArtDmx protocol version and opcode.
+/// Art-Net protocol version and opcodes used by this package.
 inline constexpr std::uint16_t kProtocolVersion = 14;
+inline constexpr std::uint16_t kOpPoll = 0x2000;
+inline constexpr std::uint16_t kOpPollReply = 0x2100;
 inline constexpr std::uint16_t kOpDmx = 0x5000;
 
 /// ArtDmx header size and maximum packet size.

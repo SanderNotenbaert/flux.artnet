@@ -47,6 +47,50 @@ endif ()
 include(${CMAKE_CURRENT_SOURCE_DIR}/source/min-api/script/min-package.cmake)
 
 
+# Shared networking core
+#
+# Max loads each .mxo as a separate module, so a singleton compiled into both
+# externals would give them separate UDP listeners. This dylib is linked by
+# both modules and owns the one listener on port 6454 plus the discovery
+# registry.
+find_package(Threads REQUIRED)
+
+file(MAKE_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/externals")
+
+add_library(flux.artnet.core SHARED
+    source/artnet/discovery.cpp
+    source/artnet/receiver_advertisement.cpp
+    source/artnet/shared_core.cpp
+)
+
+target_include_directories(flux.artnet.core PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/source/artnet")
+target_link_libraries(flux.artnet.core PRIVATE Threads::Threads)
+
+set_target_properties(flux.artnet.core PROPERTIES
+    CXX_STANDARD 17
+    CXX_STANDARD_REQUIRED ON
+    OUTPUT_NAME "flux.artnet.core"
+    PREFIX ""
+    LIBRARY_OUTPUT_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}/externals"
+    LIBRARY_OUTPUT_DIRECTORY_DEBUG "${CMAKE_CURRENT_SOURCE_DIR}/externals"
+    LIBRARY_OUTPUT_DIRECTORY_RELEASE "${CMAKE_CURRENT_SOURCE_DIR}/externals"
+)
+
+if (APPLE)
+    set_target_properties(flux.artnet.core PROPERTIES
+        SUFFIX ".dylib"
+        INSTALL_NAME_DIR "@rpath"
+        BUILD_WITH_INSTALL_NAME_DIR ON
+        MACOSX_RPATH ON
+    )
+    add_custom_command(TARGET flux.artnet.core POST_BUILD
+        COMMAND codesign -s - -f "$<TARGET_FILE:flux.artnet.core>"
+        VERBATIM
+        COMMENT "Code sign flux.artnet.core"
+    )
+endif ()
+
+
 # Add the Lib, if it exists
 if (EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/source/min-lib/CMakeLists.txt")
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/source/min-lib)

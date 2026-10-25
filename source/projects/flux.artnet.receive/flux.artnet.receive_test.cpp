@@ -54,7 +54,7 @@ struct SubscriptionGuard {
     ~SubscriptionGuard()
     {
         if (subscription)
-            ReceiverNetworkService::instance().unsubscribe(port, subscription);
+            SharedCore::instance().receiver().unsubscribe(port, subscription);
     }
 };
 
@@ -440,7 +440,7 @@ SCENARIO("the UDP receive service routes real datagrams and shares ports") {
         std::string error;
         REQUIRE(state->set_universes({5}, error));
 
-        auto subscription = ReceiverNetworkService::instance().subscribe(port, state, error);
+        auto subscription = SharedCore::instance().receiver().subscribe(port, state, error);
         REQUIRE(subscription != nullptr);
         SubscriptionGuard guard{port, subscription};
 
@@ -448,7 +448,7 @@ SCENARIO("the UDP receive service routes real datagrams and shares ports") {
             const std::vector<std::uint8_t> values{1, 2, 3, 4};
             const auto packet = encode_artdmx(5, values.data(), values.size(), 1);
             REQUIRE_FALSE(packet.empty());
-            REQUIRE(SenderNetworkService::instance().send(packet, "127.0.0.1", port, error));
+            REQUIRE(SharedCore::instance().sender().send(packet, "127.0.0.1", port, error));
 
             THEN("the packet is decoded and routed to the subscriber") {
                 REQUIRE(wait_for([&] { return state->snapshot(0).version > 0; }, 2000));
@@ -479,7 +479,7 @@ SCENARIO("the UDP receive service routes real datagrams and shares ports") {
 
                 const std::vector<std::uint8_t> values{7, 8, 9, 10};
                 const auto packet = encode_artdmx(5, values.data(), values.size(), 1);
-                REQUIRE(SenderNetworkService::instance().send(packet, "127.0.0.1", port, error));
+                REQUIRE(SharedCore::instance().sender().send(packet, "127.0.0.1", port, error));
                 REQUIRE(wait_for([&] { return state->snapshot(0).version > 0; }, 2000));
                 REQUIRE(state->snapshot(0).data[0] == 7);
             }
@@ -488,16 +488,16 @@ SCENARIO("the UDP receive service routes real datagrams and shares ports") {
         WHEN("two receiver objects subscribe to the same port") {
             auto second_state = std::make_shared<ReceiverState>();
             REQUIRE(second_state->set_universes({5}, error));
-            auto second_subscription = ReceiverNetworkService::instance().subscribe(port, second_state, error);
+            auto second_subscription = SharedCore::instance().receiver().subscribe(port, second_state, error);
             REQUIRE(second_subscription != nullptr);
 
             {
                 SubscriptionGuard second_guard{port, second_subscription};
-                REQUIRE(ReceiverNetworkService::instance().listener_for_port(port) != nullptr);
+                REQUIRE(SharedCore::instance().receiver().listener_for_port(port) != nullptr);
 
                 const std::vector<std::uint8_t> values{42, 43};
                 const auto packet = encode_artdmx(5, values.data(), values.size(), 1);
-                REQUIRE(SenderNetworkService::instance().send(packet, "127.0.0.1", port, error));
+                REQUIRE(SharedCore::instance().sender().send(packet, "127.0.0.1", port, error));
 
                 THEN("both subscribers receive the packet from one socket") {
                     REQUIRE(wait_for([&] { return state->snapshot(0).version > 0 && second_state->snapshot(0).version > 0; }, 2000));
@@ -508,7 +508,7 @@ SCENARIO("the UDP receive service routes real datagrams and shares ports") {
         }
 
         THEN("broadcast destination discovery always yields at least one address") {
-            const auto addresses = SenderNetworkService::instance().broadcast_addresses();
+            const auto addresses = SharedCore::instance().sender().broadcast_addresses();
             REQUIRE_FALSE(addresses.empty());
             for (const auto& address : addresses) {
                 in_addr parsed{};

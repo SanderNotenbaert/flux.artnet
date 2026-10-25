@@ -9,6 +9,7 @@
 #include "min_helpers.hpp"
 #include "network_service.hpp"
 #include "receiver_state.hpp"
+#include "shared_core.hpp"
 
 #include <algorithm>
 #include <array>
@@ -102,7 +103,7 @@ class artnet_receive : public object<artnet_receive> {
     };
 
 
-    message<> bang { this, "bang", "Output the current frame for every configured universe immediately.",
+    message<> bang { this, "bang", "Output the current frame for every configured universe immediately. During blackout, bang outputs zeros.",
         MIN_FUNCTION {
             if (m_blackout)
                 output_blackout();
@@ -171,8 +172,13 @@ class artnet_receive : public object<artnet_receive> {
         m_output_timer.stop();
         m_startup_timer.stop();
 
+        if (m_advertisement_id != 0) {
+            SharedCore::instance().advertisement().remove_receiver(m_advertisement_id);
+            m_advertisement_id = 0;
+        }
+
         if (m_subscription) {
-            ReceiverNetworkService::instance().unsubscribe(m_subscription->port, m_subscription);
+            SharedCore::instance().receiver().unsubscribe(m_subscription->port, m_subscription);
             m_subscription.reset();
         }
 
@@ -421,9 +427,13 @@ class artnet_receive : public object<artnet_receive> {
 
         if (kEnableNetwork) {
             std::string error;
-            m_subscription = ReceiverNetworkService::instance().subscribe(kDefaultPort, m_state, error);
-            if (!m_subscription)
+            m_subscription = SharedCore::instance().receiver().subscribe(kDefaultPort, m_state, error);
+            if (!m_subscription) {
                 log_error("could not start receiver: " + error);
+            }
+            else {
+                m_advertisement_id = SharedCore::instance().advertisement().add_receiver(m_state->universes());
+            }
             start_output_timer();
         }
     }
@@ -442,6 +452,7 @@ class artnet_receive : public object<artnet_receive> {
     std::vector<std::uint64_t> m_last_output_versions;
     std::array<max::t_atom, kChannelCount> m_output_atoms{};
     std::shared_ptr<ReceiverSubscription> m_subscription;
+    std::uint64_t m_advertisement_id{0};
 
     double m_framerate{0.0};
     bool m_started{false};

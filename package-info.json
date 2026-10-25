@@ -1,6 +1,6 @@
 {
 	"author" : "Sander Notenbaert",
-	"description" : "Send and receive Art-Net DMX data over UDP in Max.",
+	"description" : "Send, receive and discover Art-Net DMX devices over UDP in Max.",
 	"homepatcher" : "",
 	"max_version_min" : "8.2", "max_version_max" : "none",
 	"name" : "flux.artnet",
@@ -15,6 +15,6 @@
 		"copyright" : "Copyright (c) 2026 Sander Notenbaert"
 	},
 	"tags" : [ "artnet", "dmx", "network" ],
-	"version" : "0.1.0",
+	"version" : "0.3.0",
 	"website" : "https://github.com/SanderNotenbaert/flux.artnet"
 }

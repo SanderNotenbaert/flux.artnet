@@ -6,8 +6,8 @@
 
 <c74object name='flux.artnet.send' category='artnet,  dmx,  network'>
 
-	<digest>Send Art-Net DMX data over UDP</digest>
-	<description>Send DMX channel values from Max to Art-Net lighting devices and software over the network.</description>
+	<digest>Send DMX channel values from Max to Art-Net lighting devices and software over the network</digest>
+	<description>Send DMX channel values from Max to Art-Net lighting devices and software over the network. </description>
 
 
 	<!--METADATA-->
@@ -31,6 +31,31 @@
 
 	<methodlist>
 
+		<method name='blackout'>
+			<digest>blackout 1 sends zeros on every configured universe; blackout 0 restores the retained frames</digest>
+			<description>blackout 1 sends zeros on every configured universe; blackout 0 restores the retained frames. </description>
+		</method>
+
+		<method name='info'>
+			<digest>Output the current host and, when it matches a discovered device, its MAC, names and output universes on the right outlet</digest>
+			<description>Output the current host and, when it matches a discovered device, its MAC, names and output universes on the right outlet. </description>
+		</method>
+
+		<method name='device'>
+			<digest>Connect to a discovered device by name, or by name and IP address</digest>
+			<description>Connect to a discovered device by name, or by name and IP address. A single IP address is also accepted. </description>
+		</method>
+
+		<method name='devices'>
+			<digest>Poll for Art-Net devices and output the full list on the right outlet after a 250 ms collection window</digest>
+			<description>Poll for Art-Net devices and output the full list on the right outlet after a 250 ms collection window. </description>
+		</method>
+
+		<method name='set'>
+			<digest>Update the stored frame without transmitting</digest>
+			<description>Update the stored frame without transmitting. Integers are 0-255; floats are normalized 0.0-1.0. </description>
+		</method>
+
 		<method name='universe'>
 			<digest>Write channel values in a selected universe</digest>
 			<description>Write channel values in a selected universe. Integers are 0-255; floats are normalized 0.0-1.0. </description>
@@ -46,9 +71,9 @@
 			<description>Write one normalized channel value (0.0-1.0) at offset 0 of universe index 0. </description>
 		</method>
 
-		<method name='set'>
-			<digest>Update the stored frame without transmitting</digest>
-			<description>Update the stored frame without transmitting. Integers are 0-255; floats are normalized 0.0-1.0. </description>
+		<method name='list'>
+			<digest>Write channel values from offset 0 of universe index 0</digest>
+			<description>Write channel values from offset 0 of universe index 0. Integers are 0-255; floats are normalized 0.0-1.0. </description>
 		</method>
 
 		<method name='int'>
@@ -61,22 +86,17 @@
 			<description>Write channel values from a channel offset. Integers are 0-255; floats are normalized 0.0-1.0. </description>
 		</method>
 
-		<method name='list'>
-			<digest>Write channel values from offset 0 of universe index 0</digest>
-			<description>Write channel values from offset 0 of universe index 0. Integers are 0-255; floats are normalized 0.0-1.0. </description>
-		</method>
-
-		<method name='blackout'>
-			<digest>Temporarily send zeros on all universes</digest>
-			<description>blackout 1 immediately sends a zero frame for every configured universe and keeps sending zeros while active. Stored values are retained and incoming updates still update them. blackout 0 immediately sends the retained frames and resumes normal transmission.</description>
-		</method>
-
 	</methodlist>
 
 
 	<!--ATTRIBUTES-->
 
 	<attributelist>
+
+		<attribute name='discover' get='1' set='1' type='long' size='1' >
+			<digest>When 1, poll for Art-Net devices every 3 seconds and output the full device list on the right outlet whenever it changes</digest>
+			<description>When 1, poll for Art-Net devices every 3 seconds and output the full device list on the right outlet whenever it changes. Discovery temporarily shares UDP port 6454 with flux.artnet.receive. </description>
+		</attribute>
 
 		<attribute name='framerate' get='1' set='1' type='float64' size='1' >
 			<digest>Transmission rate in frames per second</digest>
@@ -85,12 +105,12 @@
 
 		<attribute name='host' get='1' set='1' type='symbol' size='1' >
 			<digest>Unicast destination IP address or hostname</digest>
-			<description>Unicast destination IP address or hostname. Leave empty to send to the broadcast address of every active IPv4 interface. </description>
+			<description>Unicast destination IP address or hostname. Leave empty to send to the broadcast address of every active IPv4 interface. Changing the host starts a silent ArtPoll probe and emits a connected message when a device replies. </description>
 		</attribute>
 
 		<attribute name='quiet' get='1' set='1' type='long' size='1' >
-			<digest>When 1, suppress error messages in the Max console</digest>
-			<description>When 1, suppress error messages in the Max console. Errors are still sent to the right outlet. </description>
+			<digest>When 1, suppress console messages from this object</digest>
+			<description>When 1, suppress console messages from this object. Right-outlet messages are unaffected. </description>
 		</attribute>
 
 		<attribute name='universes' get='1' set='1' type='symbol' size='1' >

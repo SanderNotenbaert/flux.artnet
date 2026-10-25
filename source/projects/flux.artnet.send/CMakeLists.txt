@@ -31,7 +31,15 @@ add_library(
 	${SOURCE_FILES}
 )
 
-target_link_libraries(${PROJECT_NAME} PRIVATE Threads::Threads)
+target_link_libraries(${PROJECT_NAME} PRIVATE flux.artnet.core Threads::Threads)
+add_dependencies(${PROJECT_NAME} flux.artnet.core)
+
+if (APPLE)
+	set_target_properties(${PROJECT_NAME} PROPERTIES
+		BUILD_WITH_INSTALL_RPATH TRUE
+		INSTALL_RPATH "@loader_path/../../.."
+	)
+endif ()
 
 if (NOT DEFINED PACKAGE_VERSION OR PACKAGE_VERSION STREQUAL "")
 	target_compile_definitions(${PROJECT_NAME} PRIVATE FLUX_ARTNET_VERSION="unknown")
@@ -50,5 +58,12 @@ include(${C74_MIN_API_DIR}/script/min-posttarget.cmake)
 include(${C74_MIN_API_DIR}/test/min-object-unittest.cmake)
 
 if (TARGET ${PROJECT_NAME}_test)
-	target_link_libraries(${PROJECT_NAME}_test PRIVATE Threads::Threads)
+	target_link_libraries(${PROJECT_NAME}_test PRIVATE flux.artnet.core Threads::Threads)
+	add_dependencies(${PROJECT_NAME}_test flux.artnet.core)
+	if (APPLE)
+		set_target_properties(${PROJECT_NAME}_test PROPERTIES
+			BUILD_WITH_INSTALL_RPATH TRUE
+			INSTALL_RPATH "@loader_path;@loader_path/../externals"
+		)
+	endif ()
 endif ()

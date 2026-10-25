@@ -6,11 +6,21 @@
 #include "c74_min_unittest.h"          // required unit test header
 #include "flux.artnet.send.cpp"        // need the source of our object so that we can access it
 
+#include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
+
+#include <array>
+#include <chrono>
 #include <cstdint>
+#include <cstdio>
 #include <cstring>
 #include <functional>
 #include <limits>
+#include <memory>
 #include <string>
+#include <thread>
 #include <vector>
 
 using namespace c74::min;
@@ -20,6 +30,43 @@ struct artnet_send_test_access {
     static SenderEngine& engine(artnet_send& object)
     {
         return object.m_engine;
+    }
+
+    static void output_devices(artnet_send& object)
+    {
+        object.output_devices();
+    }
+
+    static void output_info(artnet_send& object)
+    {
+        object.output_info();
+    }
+
+    static void emit_connected(artnet_send& object, const DiscoveredDevice& device)
+    {
+        object.emit_connected(device);
+    }
+
+    static bool probe_active(const artnet_send& object)
+    {
+        return object.m_probe_active;
+    }
+
+    static std::uint64_t probe_serial(const artnet_send& object)
+    {
+        return object.m_probe_serial;
+    }
+
+    static void on_probe_timer(artnet_send& object)
+    {
+        object.on_probe_timer();
+    }
+
+    static const DiscoveredDevice* probe_match(const std::vector<DiscoveredDevice>& devices,
+                                               const std::vector<std::string>& targets,
+                                               std::chrono::steady_clock::time_point start)
+    {
+        return artnet_send::find_probe_match(devices, targets, start);
     }
 };
 
@@ -42,6 +89,140 @@ ArtDmxPacket decode_packet(const std::vector<std::uint8_t>& bytes)
     ArtDmxPacket packet;
     decode_artdmx(bytes.data(), bytes.size(), packet);
     return packet;
+}
+
+std::vector<std::uint8_t> make_poll_reply(const std::string& ip,
+                                          const std::string& long_name,
+                                          const std::string& short_name,
+                                          const std::array<std::uint8_t, 6>& mac,
+                                          std::uint8_t bind_index,
+                                          std::uint8_t net,
+                                          std::uint8_t subnet,
+                                          std::uint16_t num_ports,
+                                          const std::array<std::uint8_t, 4>& port_types,
+                                          const std::array<std::uint8_t, 4>& swout,
+                                          const std::array<std::uint8_t, 4>& swin = {})
+{
+    std::vector<std::uint8_t> data(239, 0);
+    std::memcpy(data.data(), "Art-Net\0", 8);
+    data[8] = 0x00;
+    data[9] = 0x21;
+
+    unsigned a = 0, b = 0, c = 0, d = 0;
+    std::sscanf(ip.c_str(), "%u.%u.%u.%u", &a, &b, &c, &d);
+    data[10] = static_cast<std::uint8_t>(a);
+    data[11] = static_cast<std::uint8_t>(b);
+    data[12] = static_cast<std::uint8_t>(c);
+    data[13] = static_cast<std::uint8_t>(d);
+
+    data[14] = 0x36;
+    data[15] = 0x19; // Port 0x1936, little-endian
+    data[16] = 0x01;
+    data[17] = 0x02;
+    data[18] = net;
+    data[19] = subnet;
+    data[20] = 0x00;
+    data[21] = 0x10;
+    data[23] = 0xC0;
+
+    std::memcpy(data.data() + 26, short_name.data(), std::min<std::size_t>(short_name.size(), 17));
+    std::memcpy(data.data() + 44, long_name.data(), std::min<std::size_t>(long_name.size(), 63));
+
+    data[172] = static_cast<std::uint8_t>((num_ports >> 8) & 0xFF);
+    data[173] = static_cast<std::uint8_t>(num_ports & 0xFF);
+    for (std::size_t i = 0; i < 4; ++i) {
+        data[174 + i] = port_types[i];
+        data[186 + i] = swin[i];
+        data[190 + i] = swout[i];
+    }
+
+    for (std::size_t i = 0; i < mac.size(); ++i)
+        data[201 + i] = mac[i];
+
+    data[207] = static_cast<std::uint8_t>(a);
+    data[208] = static_cast<std::uint8_t>(b);
+    data[209] = static_cast<std::uint8_t>(c);
+    data[210] = static_cast<std::uint8_t>(d);
+    data[211] = bind_index;
+    return data;
+}
+
+ArtPollReplyPacket decode_reply(const std::vector<std::uint8_t>& data)
+{
+    ArtPollReplyPacket packet;
+    REQUIRE(decode_artpollreply(data.data(), data.size(), packet));
+    return packet;
+}
+
+std::vector<std::string> output_values(void* object, int outlet, std::size_t message_index)
+{
+    std::vector<std::string> result;
+    auto* output = c74::max::object_getoutput(object, outlet);
+    if (output == nullptr || output->size() <= message_index)
+        return result;
+
+    for (const auto& value : (*output)[message_index]) {
+        switch (value.type()) {
+            case message_type::symbol_argument:
+                result.push_back(static_cast<std::string>(symbol(static_cast<c74::max::t_symbol*>(value))));
+                break;
+            case message_type::int_argument:
+                result.push_back(std::to_string(static_cast<int>(value)));
+                break;
+            case message_type::float_argument:
+                result.push_back(std::to_string(static_cast<double>(value)));
+                break;
+            default:
+                result.push_back("<other>");
+                break;
+        }
+    }
+    return result;
+}
+
+std::size_t output_message_count(void* object, int outlet)
+{
+    auto* output = c74::max::object_getoutput(object, outlet);
+    return output == nullptr ? 0 : output->size();
+}
+
+std::uint16_t find_free_udp_port()
+{
+    const int descriptor = ::socket(AF_INET, SOCK_DGRAM, 0);
+    if (descriptor < 0)
+        return 0;
+
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    address.sin_port = 0;
+
+    if (::bind(descriptor, reinterpret_cast<const sockaddr*>(&address), sizeof(address)) != 0) {
+        ::close(descriptor);
+        return 0;
+    }
+
+    socklen_t length = sizeof(address);
+    if (::getsockname(descriptor, reinterpret_cast<sockaddr*>(&address), &length) != 0) {
+        ::close(descriptor);
+        return 0;
+    }
+
+    const std::uint16_t port = ntohs(address.sin_port);
+    ::close(descriptor);
+    return port;
+}
+
+template <class Predicate>
+bool wait_for(Predicate predicate, int timeout_ms)
+{
+    const auto deadline = std::chrono::steady_clock::now() + std::chrono::milliseconds(timeout_ms);
+    while (std::chrono::steady_clock::now() < deadline) {
+        if (predicate())
+            return true;
+        std::this_thread::sleep_for(std::chrono::milliseconds(2));
+    }
+    return predicate();
 }
 
 } // namespace
@@ -462,6 +643,376 @@ SCENARIO("SenderEngine applies updates atomically and transmits full frames") {
 }
 
 
+SCENARIO("ArtPoll and ArtPollReply packets use the Art-Net wire format") {
+    THEN("the ArtPoll encoder produces the 14-byte minimum packet") {
+        const auto packet = encode_artpoll();
+        REQUIRE(packet.size() == 14);
+        REQUIRE(std::memcmp(packet.data(), "Art-Net\0", 8) == 0);
+        REQUIRE(packet[8] == 0x00);
+        REQUIRE(packet[9] == 0x20);
+        REQUIRE(packet[10] == 0x00);
+        REQUIRE(packet[11] == 0x0E);
+        REQUIRE(packet[12] == 0);
+    }
+
+    THEN("ArtPoll decodes flags and targeted Port-Address ranges") {
+        auto packet = encode_artpoll();
+        ArtPollPacket poll;
+        REQUIRE(decode_artpoll(packet.data(), packet.size(), poll));
+        REQUIRE_FALSE(poll.targeted());
+        REQUIRE(poll.matches(0));
+        REQUIRE(poll.matches(32767));
+
+        packet.resize(18, 0);
+        packet[12] = kArtPollFlagTargetedMode;
+        packet[14] = 0x00;
+        packet[15] = 0x10; // top = 16
+        packet[16] = 0x00;
+        packet[17] = 0x02; // bottom = 2
+        REQUIRE(decode_artpoll(packet.data(), packet.size(), poll));
+        REQUIRE(poll.targeted());
+        REQUIRE(poll.matches(2));
+        REQUIRE(poll.matches(16));
+        REQUIRE_FALSE(poll.matches(1));
+        REQUIRE_FALSE(poll.matches(17));
+    }
+
+    THEN("ArtPollReply encoding round-trips through the decoder") {
+        ArtPollReplyPacket reply;
+        reply.ip = "192.168.1.40";
+        reply.port = kDefaultPort;
+        reply.firmware_version = 0x0300;
+        reply.net = 0;
+        reply.subnet = 1;
+        reply.oem = 0xFFFF;
+        reply.status1 = 0xC0;
+        reply.esta_manufacturer = 0x7FF0;
+        reply.short_name = "flux.artnet";
+        reply.long_name = "flux.artnet.receive";
+        reply.node_report = "ready";
+        reply.num_ports = 1;
+        reply.port_types[0] = 0x80;
+        reply.swout[0] = 2;
+        reply.style = 0x06;
+        reply.mac = {0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e};
+        reply.bind_ip = "192.168.1.40";
+        reply.bind_index = 1;
+        reply.status2 = 0x08;
+
+        const auto encoded = encode_artpollreply(reply);
+        REQUIRE(encoded.size() == 239);
+
+        ArtPollReplyPacket decoded;
+        REQUIRE(decode_artpollreply(encoded.data(), encoded.size(), decoded));
+        REQUIRE(decoded.ip == "192.168.1.40");
+        REQUIRE(decoded.short_name == "flux.artnet");
+        REQUIRE(decoded.long_name == "flux.artnet.receive");
+        REQUIRE(decoded.num_ports == 1);
+        REQUIRE(decoded.port_types[0] == 0x80);
+        REQUIRE(decoded.output_universe(0) == 18);
+        REQUIRE(decoded.style == 0x06);
+        REQUIRE(decoded.bind_ip == "192.168.1.40");
+        REQUIRE(decoded.bind_index == 1);
+        REQUIRE(decoded.mac_string() == "00:1a:2b:3c:4d:5e");
+    }
+
+    GIVEN("a synthetic ArtPollReply") {
+        const auto data = make_poll_reply("192.168.1.40",
+                                          "Stage Left Dimmer",
+                                          "StageLeft",
+                                          {0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e},
+                                          1,
+                                          0,
+                                          1,
+                                          1,
+                                          {0x80, 0, 0, 0},
+                                          {2, 0, 0, 0});
+
+        THEN("the decoder reads names, identity and universes") {
+            const auto reply = decode_reply(data);
+            REQUIRE(reply.ip == "192.168.1.40");
+            REQUIRE(reply.long_name == "Stage Left Dimmer");
+            REQUIRE(reply.short_name == "StageLeft");
+            REQUIRE(reply.mac_string() == "00:1a:2b:3c:4d:5e");
+            REQUIRE(reply.num_ports == 1);
+            REQUIRE(reply.port_types[0] == 0x80);
+            REQUIRE(reply.output_universe(0) == 18);
+            REQUIRE(reply.bind_index == 1);
+        }
+
+        THEN("a 207-byte reply without the Art-Net 4 tail is accepted") {
+            const std::vector<std::uint8_t> short_reply(data.begin(), data.begin() + 207);
+            const auto reply = decode_reply(short_reply);
+            REQUIRE(reply.ip == "192.168.1.40");
+            REQUIRE(reply.bind_index == 0);
+            REQUIRE(reply.bind_ip.empty());
+            REQUIRE(reply.output_universe(0) == 18);
+        }
+
+        THEN("short, misidentified and wrong-opcode packets are rejected") {
+            ArtPollReplyPacket reply;
+            REQUIRE_FALSE(decode_artpollreply(data.data(), 206, reply));
+
+            auto broken = data;
+            broken[0] = 'X';
+            REQUIRE_FALSE(decode_artpollreply(broken.data(), broken.size(), reply));
+
+            broken = data;
+            broken[8] = 0x00;
+            broken[9] = 0x50;
+            REQUIRE_FALSE(decode_artpollreply(broken.data(), broken.size(), reply));
+        }
+    }
+}
+
+
+SCENARIO("DeviceRegistry merges and tracks Art-Net nodes") {
+    DeviceRegistry registry;
+    const auto start = DeviceRegistry::Clock::now();
+    const std::array<std::uint8_t, 6> mac_a{0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e};
+    const std::array<std::uint8_t, 6> mac_b{0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5f};
+
+    GIVEN("a single output device") {
+        const auto data = make_poll_reply("192.168.1.40", "Stage Left Dimmer", "StageLeft", mac_a, 1, 0, 1, 1, {0x80, 0, 0, 0}, {2, 0, 0, 0});
+        registry.update(decode_reply(data), "192.168.1.40", start);
+
+        THEN("it is exposed with its display name, MAC and output universes") {
+            const auto devices = registry.snapshot(start);
+            REQUIRE(devices.size() == 1);
+            REQUIRE(devices[0].ip == "192.168.1.40");
+            REQUIRE(devices[0].display_name() == "Stage Left Dimmer");
+            REQUIRE(devices[0].short_name == "StageLeft");
+            REQUIRE(devices[0].mac == "00:1a:2b:3c:4d:5e");
+            REQUIRE(devices[0].output_universes == std::vector<int>{18});
+        }
+
+        THEN("polling the same reply does not count as a change") {
+            const auto generation = registry.generation();
+            registry.update(decode_reply(data), "192.168.1.40", start + std::chrono::seconds(1));
+            REQUIRE(registry.generation() == generation);
+        }
+    }
+
+    GIVEN("duplicate names on two IP addresses") {
+        const auto first = make_poll_reply("192.168.1.41", "Dimmer", "Dimmer", mac_a, 1, 0, 0, 1, {0x80, 0, 0, 0}, {1, 0, 0, 0});
+        const auto second = make_poll_reply("192.168.1.40", "Dimmer", "Dimmer", mac_b, 1, 0, 0, 1, {0x80, 0, 0, 0}, {2, 0, 0, 0});
+        registry.update(decode_reply(first), "192.168.1.41", start);
+        registry.update(decode_reply(second), "192.168.1.40", start);
+
+        THEN("the list is sorted by IP so selection is deterministic") {
+            const auto devices = registry.snapshot(start);
+            REQUIRE(devices.size() == 2);
+            REQUIRE(devices[0].ip == "192.168.1.40");
+            REQUIRE(devices[1].ip == "192.168.1.41");
+            REQUIRE(devices[0].display_name() == devices[1].display_name());
+        }
+    }
+
+    GIVEN("a multi-bind node sending one port per ArtPollReply") {
+        const auto page_one = make_poll_reply("192.168.1.40", "Eight Port Node", "Node", mac_a, 1, 0, 0, 1, {0x80, 0, 0, 0}, {1, 0, 0, 0});
+        const auto page_two = make_poll_reply("192.168.1.40", "Eight Port Node", "Node", mac_a, 2, 0, 0, 1, {0x80, 0, 0, 0}, {2, 0, 0, 0});
+        registry.update(decode_reply(page_one), "192.168.1.40", start);
+        registry.update(decode_reply(page_two), "192.168.1.40", start);
+
+        THEN("both pages become one device with both universes") {
+            const auto devices = registry.snapshot(start);
+            REQUIRE(devices.size() == 1);
+            REQUIRE(devices[0].output_universes == (std::vector<int>{1, 2}));
+        }
+    }
+
+    GIVEN("a multi-port reply with four output ports") {
+        const auto data = make_poll_reply("192.168.1.40", "Four Port Node", "Node", mac_a, 1, 0, 0, 4, {0x80, 0x80, 0x80, 0x80}, {0, 1, 2, 3});
+        registry.update(decode_reply(data), "192.168.1.40", start);
+
+        THEN("all four Port-Addresses are reported") {
+            const auto devices = registry.snapshot(start);
+            REQUIRE(devices[0].output_universes == (std::vector<int>{0, 1, 2, 3}));
+        }
+    }
+
+    GIVEN("an input-only node") {
+        const auto data = make_poll_reply("192.168.1.40", "Input Node", "In", mac_a, 1, 0, 0, 1, {0x40, 0, 0, 0}, {0, 0, 0, 0}, {5, 0, 0, 0});
+        registry.update(decode_reply(data), "192.168.1.40", start);
+
+        THEN("it has an input universe but no output universe") {
+            const auto devices = registry.snapshot(start);
+            REQUIRE(devices[0].output_universes.empty());
+            REQUIRE(devices[0].input_universes == std::vector<int>{5});
+        }
+    }
+
+    GIVEN("a device that stops replying") {
+        const auto data = make_poll_reply("192.168.1.40", "Dimmer", "Dimmer", mac_a, 1, 0, 0, 1, {0x80, 0, 0, 0}, {1, 0, 0, 0});
+        registry.update(decode_reply(data), "192.168.1.40", start);
+
+        THEN("it expires after the discovery timeout") {
+            REQUIRE(registry.snapshot(start + DeviceRegistry::kDeviceTimeout).size() == 1);
+            REQUIRE(registry.snapshot(start + DeviceRegistry::kDeviceTimeout + std::chrono::seconds(1)).empty());
+        }
+    }
+}
+
+
+SCENARIO("DiscoveryService receives ArtPollReply over a real UDP socket") {
+    const std::uint16_t port = find_free_udp_port();
+    REQUIRE(port != 0);
+
+    SenderNetworkService sender;
+    ReceiverNetworkService receiver;
+    DiscoveryService discovery{sender, receiver, port};
+
+    std::string error;
+    REQUIRE(discovery.acquire(error));
+    REQUIRE(receiver.listener_for_port(port) != nullptr);
+
+    // The listener socket is also the ArtPoll sender. A loopback ArtPoll is
+    // ignored by the packet router but proves the send path works.
+    REQUIRE(receiver.send_on_port(port, encode_artpoll(), {"127.0.0.1"}, error));
+
+    const std::array<std::uint8_t, 6> mac{0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e};
+    const auto reply = make_poll_reply("192.168.1.40", "Stage Left Dimmer", "StageLeft", mac, 1, 0, 1, 1, {0x80, 0, 0, 0}, {2, 0, 0, 0});
+    REQUIRE(sender.send(reply, "127.0.0.1", port, error));
+
+    REQUIRE(wait_for([&] { return discovery.devices().size() == 1; }, 1000));
+
+    const auto devices = discovery.devices();
+    REQUIRE(devices[0].ip == "192.168.1.40");
+    REQUIRE(devices[0].display_name() == "Stage Left Dimmer");
+    REQUIRE(devices[0].mac == "00:1a:2b:3c:4d:5e");
+    REQUIRE(devices[0].output_universes == std::vector<int>{18});
+
+    discovery.release();
+    REQUIRE(receiver.listener_for_port(port) == nullptr);
+}
+
+
+SCENARIO("Discovery and receiving share one UDP listener") {
+    const std::uint16_t port = find_free_udp_port();
+    REQUIRE(port != 0);
+
+    SenderNetworkService sender;
+    ReceiverNetworkService receiver;
+    auto state = std::make_shared<ReceiverState>();
+
+    std::string error;
+    REQUIRE(state->set_universes({0}, error));
+    auto subscription = receiver.subscribe(port, state, error);
+    REQUIRE(subscription != nullptr);
+
+    DiscoveryService discovery{sender, receiver, port};
+    REQUIRE(discovery.acquire(error));
+
+    DmxFrame frame{};
+    frame[0] = 42;
+    const auto dmx = encode_artdmx(0, frame.data(), frame.size(), 1);
+    REQUIRE(sender.send(dmx, "127.0.0.1", port, error));
+
+    const std::array<std::uint8_t, 6> mac{0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e};
+    const auto reply = make_poll_reply("192.168.1.40", "Stage Left Dimmer", "StageLeft", mac, 1, 0, 1, 1, {0x80, 0, 0, 0}, {2, 0, 0, 0});
+    REQUIRE(sender.send(reply, "127.0.0.1", port, error));
+
+    REQUIRE(wait_for([&] {
+        return state->snapshot(0).data[0] == 42 && discovery.devices().size() == 1;
+    }, 1000));
+
+    discovery.release();
+    REQUIRE(receiver.listener_for_port(port) != nullptr);
+
+    receiver.unsubscribe(port, subscription);
+    REQUIRE(receiver.listener_for_port(port) == nullptr);
+}
+
+
+SCENARIO("ReceiverAdvertisementService merges receive universes into ArtPollReply pages") {
+    SenderNetworkService sender;
+    ReceiverNetworkService receiver;
+    ReceiverAdvertisementService advertisement{receiver, 0};
+
+    REQUIRE(advertisement.receiver_count() == 0);
+    REQUIRE(advertisement.replies_for("192.168.1.10").empty());
+
+    const auto first = advertisement.add_receiver({0, 1});
+    const auto second = advertisement.add_receiver({1, 16, 17, 18, 19});
+    REQUIRE(advertisement.receiver_count() == 2);
+    REQUIRE(advertisement.advertised_universes() == (std::vector<int>{0, 1, 16, 17, 18, 19}));
+
+    const auto replies = advertisement.replies_for("192.168.1.10");
+    REQUIRE(replies.size() == 2);
+
+    REQUIRE(replies[0].ip == "192.168.1.10");
+    REQUIRE(replies[0].short_name == "flux.artnet");
+    REQUIRE(replies[0].long_name == "flux.artnet.receive");
+    REQUIRE(replies[0].style == 0x06);
+    REQUIRE(replies[0].bind_ip == "192.168.1.10");
+    REQUIRE(replies[0].bind_index == 1);
+    REQUIRE(replies[0].num_ports == 2);
+    REQUIRE(replies[0].output_universe(0) == 0);
+    REQUIRE(replies[0].output_universe(1) == 1);
+
+    REQUIRE(replies[1].bind_index == 2);
+    REQUIRE(replies[1].net == 0);
+    REQUIRE(replies[1].subnet == 1);
+    REQUIRE(replies[1].num_ports == 4);
+    REQUIRE(replies[1].output_universe(0) == 16);
+    REQUIRE(replies[1].output_universe(3) == 19);
+
+    advertisement.remove_receiver(second);
+    REQUIRE(advertisement.advertised_universes() == (std::vector<int>{0, 1}));
+    advertisement.remove_receiver(first);
+    REQUIRE(advertisement.receiver_count() == 0);
+}
+
+
+SCENARIO("ArtPoll from the discovery service reaches the receiver advertisement") {
+    const std::uint16_t port = find_free_udp_port();
+    REQUIRE(port != 0);
+
+    SenderNetworkService sender;
+    ReceiverNetworkService receiver;
+    DiscoveryService discovery{sender, receiver, port};
+    ReceiverAdvertisementService advertisement{receiver, port};
+
+    std::string error;
+    REQUIRE(discovery.acquire(error));
+    const auto registration = advertisement.add_receiver({0, 1});
+    REQUIRE(registration != 0);
+
+    REQUIRE(discovery.poll_hosts({"127.0.0.1"}, error));
+    REQUIRE(wait_for([&] { return discovery.devices().size() == 1; }, 1000));
+
+    const auto devices = discovery.devices();
+    REQUIRE(devices[0].ip == "127.0.0.1");
+    REQUIRE(devices[0].source_ip == "127.0.0.1");
+    REQUIRE(devices[0].display_name() == "flux.artnet.receive");
+    REQUIRE(devices[0].output_universes == (std::vector<int>{0, 1}));
+
+    advertisement.remove_receiver(registration);
+    discovery.release();
+}
+
+
+SCENARIO("Connection probe matching requires a fresh reply from the target") {
+    DiscoveredDevice device;
+    device.ip = "192.168.1.40";
+    device.source_ip = "192.168.1.40";
+    device.last_seen = std::chrono::steady_clock::now();
+
+    const std::vector<DiscoveredDevice> devices{device};
+    const std::vector<std::string> matching{"192.168.1.40"};
+    const std::vector<std::string> other{"192.168.1.41"};
+
+    REQUIRE(artnet_send_test_access::probe_match(devices, matching, device.last_seen) == &devices[0]);
+    REQUIRE(artnet_send_test_access::probe_match(devices, matching, device.last_seen + std::chrono::seconds(1)) == nullptr);
+    REQUIRE(artnet_send_test_access::probe_match(devices, other, device.last_seen) == nullptr);
+
+    DiscoveredDevice source_match = device;
+    source_match.ip = "10.0.0.99";
+    source_match.source_ip = "192.168.1.40";
+    REQUIRE(artnet_send_test_access::probe_match({source_match}, matching, source_match.last_seen) != nullptr);
+}
+
+
 SCENARIO("artnet.send exposes the documented attributes and message forms") {
     ext_main(nullptr);
 
@@ -478,7 +1029,7 @@ SCENARIO("artnet.send exposes the documented attributes and message forms") {
             REQUIRE((object.quiet == 0));
             REQUIRE(object.outlets().size() == 2);
             REQUIRE(object.outlets()[0]->description() == "bang for every universe frame transmitted");
-            REQUIRE(object.outlets()[1]->description() == "error or warning <message> on invalid input, truncation or network failure");
+            REQUIRE(object.outlets()[1]->description() == "error or warning messages, devices start/end lists with device name and IP entries, connected name/IP/universe messages, and info field/value messages");
         }
 
         THEN("invalid attributes leave the previous values intact") {
@@ -489,6 +1040,19 @@ SCENARIO("artnet.send exposes the documented attributes and message forms") {
 
             object.quiet = 7;
             REQUIRE((object.quiet == 1));
+
+            object.discover = 2;
+            REQUIRE((object.discover == 0));
+        }
+
+        WHEN("discovery is enabled") {
+            object.discover = 1;
+
+            THEN("the attribute is set and can be cleared") {
+                REQUIRE((object.discover == 1));
+                object.discover = 0;
+                REQUIRE((object.discover == 0));
+            }
         }
 
         WHEN("a list is sent") {
@@ -768,9 +1332,149 @@ SCENARIO("artnet.send exposes the documented attributes and message forms") {
                 REQUIRE((object.host == symbol("127.0.0.1")));
             }
 
+            THEN("a connection probe starts") {
+                REQUIRE(artnet_send_test_access::probe_active(object));
+            }
+
             object.host = symbol("");
             THEN("an empty host restores broadcast behaviour") {
                 REQUIRE((object.host == symbol("")));
+            }
+
+            THEN("the connection probe stops") {
+                REQUIRE_FALSE(artnet_send_test_access::probe_active(object));
+            }
+        }
+
+        WHEN("a device is selected repeatedly") {
+            object.host = symbol("127.0.0.1");
+            const auto serial = artnet_send_test_access::probe_serial(object);
+            object.device_message(atoms{symbol("127.0.0.1")});
+
+            THEN("a fresh probe is started even when the host is unchanged") {
+                REQUIRE(artnet_send_test_access::probe_serial(object) == serial + 1);
+                REQUIRE(artnet_send_test_access::probe_active(object));
+            }
+        }
+    }
+
+    GIVEN("a populated discovery registry") {
+        auto& registry = SharedCore::instance().discovery().registry();
+        registry.clear();
+
+        const auto start = DeviceRegistry::Clock::now();
+        const std::array<std::uint8_t, 6> mac_a{0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5e};
+        const std::array<std::uint8_t, 6> mac_b{0x00, 0x1a, 0x2b, 0x3c, 0x4d, 0x5f};
+
+        const auto first = make_poll_reply("192.168.1.40", "Stage Left Dimmer", "StageLeft", mac_a, 1, 0, 1, 1, {0x80, 0, 0, 0}, {2, 0, 0, 0});
+        const auto second = make_poll_reply("192.168.1.41", "Stage Left Dimmer", "StageLeft", mac_b, 1, 0, 2, 1, {0x80, 0, 0, 0}, {3, 0, 0, 0});
+        registry.update(decode_reply(first), "192.168.1.40", start);
+        registry.update(decode_reply(second), "192.168.1.41", start);
+
+        THEN("discover defaults to 0") {
+            REQUIRE(object.discover == 0);
+        }
+
+        WHEN("the devices message is output") {
+            artnet_send_test_access::output_devices(object);
+
+            THEN("the right outlet emits a start/end framed list") {
+                REQUIRE(output_message_count(object, 1) == 4);
+                REQUIRE(output_values(object, 1, 0) == (std::vector<std::string>{"devices", "start"}));
+                REQUIRE(output_values(object, 1, 1) == (std::vector<std::string>{"device", "Stage Left Dimmer", "192.168.1.40"}));
+                REQUIRE(output_values(object, 1, 2) == (std::vector<std::string>{"device", "Stage Left Dimmer", "192.168.1.41"}));
+                REQUIRE(output_values(object, 1, 3) == (std::vector<std::string>{"devices", "end"}));
+            }
+        }
+
+        WHEN("a duplicate name is selected") {
+            object.device_message(atoms{symbol("Stage Left Dimmer")});
+
+            THEN("the first device in IP order is used") {
+                REQUIRE((object.host == symbol("192.168.1.40")));
+            }
+        }
+
+        WHEN("a device is selected with name and IP") {
+            object.device_message(atoms{symbol("Stage Left Dimmer"), symbol("192.168.1.41")});
+
+            THEN("the specific device is used") {
+                REQUIRE((object.host == symbol("192.168.1.41")));
+            }
+        }
+
+        WHEN("a device is selected by IP only") {
+            object.device_message(atoms{symbol("192.168.1.99")});
+
+            THEN("the IP is used directly") {
+                REQUIRE((object.host == symbol("192.168.1.99")));
+            }
+        }
+
+        WHEN("an unknown name is selected") {
+            object.device_message(atoms{symbol("Unknown")});
+
+            THEN("an error is reported and the host stays empty") {
+                REQUIRE((object.host == symbol("")));
+                auto* status = c74::max::object_getoutput(object, 1);
+                REQUIRE(status->size() == 1);
+                REQUIRE(((*status)[0][0] == symbol("error")));
+            }
+        }
+
+        WHEN("info is requested while broadcasting") {
+            artnet_send_test_access::output_info(object);
+
+            THEN("only the host field is emitted") {
+                REQUIRE(output_message_count(object, 1) == 1);
+                REQUIRE(output_values(object, 1, 0) == (std::vector<std::string>{"info", "host"}));
+            }
+        }
+
+        WHEN("info is requested for a discovered device") {
+            object.host = symbol("192.168.1.40");
+            artnet_send_test_access::output_info(object);
+
+            THEN("host, MAC, names and output universes are emitted") {
+                REQUIRE(output_message_count(object, 1) == 5);
+                REQUIRE(output_values(object, 1, 0) == (std::vector<std::string>{"info", "host", "192.168.1.40"}));
+                REQUIRE(output_values(object, 1, 1) == (std::vector<std::string>{"info", "mac", "00:1a:2b:3c:4d:5e"}));
+                REQUIRE(output_values(object, 1, 2) == (std::vector<std::string>{"info", "shortname", "StageLeft"}));
+                REQUIRE(output_values(object, 1, 3) == (std::vector<std::string>{"info", "longname", "Stage Left Dimmer"}));
+                REQUIRE(output_values(object, 1, 4) == (std::vector<std::string>{"info", "universes", "18"}));
+            }
+        }
+
+        WHEN("info is requested for a host that is not discovered") {
+            object.host = symbol("192.168.1.99");
+            artnet_send_test_access::output_info(object);
+
+            THEN("only the host field is emitted") {
+                REQUIRE(output_message_count(object, 1) == 1);
+                REQUIRE(output_values(object, 1, 0) == (std::vector<std::string>{"info", "host", "192.168.1.99"}));
+            }
+        }
+
+        WHEN("a connection is confirmed") {
+            object.quiet = 1;
+            const auto devices = registry.snapshot(start);
+            artnet_send_test_access::emit_connected(object, devices[0]);
+
+            THEN("the right outlet emits connected with name, IP and universes") {
+                REQUIRE(output_message_count(object, 1) == 1);
+                REQUIRE(output_values(object, 1, 0) == (std::vector<std::string>{"connected", "Stage Left Dimmer", "192.168.1.40", "18"}));
+            }
+        }
+
+        WHEN("the probe receives a fresh reply") {
+            object.host = symbol("192.168.1.40");
+            registry.update(decode_reply(first), "192.168.1.40", DeviceRegistry::Clock::now());
+            artnet_send_test_access::on_probe_timer(object);
+
+            THEN("connected is emitted and probing stops") {
+                REQUIRE(output_message_count(object, 1) == 1);
+                REQUIRE(output_values(object, 1, 0) == (std::vector<std::string>{"connected", "Stage Left Dimmer", "192.168.1.40", "18"}));
+                REQUIRE_FALSE(artnet_send_test_access::probe_active(object));
             }
         }
     }

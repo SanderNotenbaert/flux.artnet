@@ -25,6 +25,7 @@
 #include <cstdint>
 #include <cstring>
 #include <exception>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -43,12 +44,6 @@ namespace flux::artnet {
 class SenderNetworkService
 {
   public:
-    static SenderNetworkService& instance()
-    {
-        static SenderNetworkService service;
-        return service;
-    }
-
     bool send(const std::vector<std::uint8_t>& packet, const std::string& host, std::uint16_t port, std::string& error)
     {
         std::lock_guard<std::mutex> lock(m_mutex);
@@ -110,7 +105,6 @@ class SenderNetworkService
         return broadcast_addresses_locked();
     }
 
-  private:
     using steady_clock = std::chrono::steady_clock;
 
     SenderNetworkService() = default;
@@ -124,6 +118,7 @@ class SenderNetworkService
         }
     }
 
+  private:
     bool ensure_socket_locked(std::string& error)
     {
         if (m_fd >= 0)
@@ -263,6 +258,12 @@ class ReceiverSubscription
 class ReceiverPortListener
 {
   public:
+    /// Receives every valid ArtPollReply datagram, including the source address.
+    using PollReplyHandler = std::function<void(const std::uint8_t*, std::size_t, const sockaddr_in&)>;
+
+    /// Receives every valid ArtPoll datagram, including the source address.
+    using PollHandler = PollReplyHandler;
+
     explicit ReceiverPortListener(std::uint16_t port)
         : m_port(port)
     {
@@ -302,6 +303,11 @@ class ReceiverPortListener
         if (flags >= 0)
             ::fcntl(m_fd, F_SETFL, flags | O_NONBLOCK);
 
+        // The listener socket is also used to transmit ArtPoll. Broadcast
+        // discovery requires SO_BROADCAST; receiving works without it.
+        const int enabled = 1;
+        ::setsockopt(m_fd, SOL_SOCKET, SO_BROADCAST, &enabled, sizeof(enabled));
+
         m_running.store(true);
         try {
             m_thread = std::thread(&ReceiverPortListener::run, this);
@@ -322,6 +328,8 @@ class ReceiverPortListener
         m_running.store(false);
         if (m_thread.joinable())
             m_thread.join();
+
+        std::lock_guard<std::mutex> lock(m_send_mutex);
         if (m_fd >= 0) {
             ::close(m_fd);
             m_fd = -1;
@@ -338,6 +346,61 @@ class ReceiverPortListener
     {
         std::lock_guard<std::mutex> lock(m_subscriptions_mutex);
         m_subscriptions.erase(std::remove(m_subscriptions.begin(), m_subscriptions.end(), subscription), m_subscriptions.end());
+    }
+
+    void set_poll_reply_handler(PollReplyHandler handler)
+    {
+        std::lock_guard<std::mutex> lock(m_handler_mutex);
+        m_poll_reply_handler = std::move(handler);
+    }
+
+    void set_poll_handler(PollHandler handler)
+    {
+        std::lock_guard<std::mutex> lock(m_handler_mutex);
+        m_poll_handler = std::move(handler);
+    }
+
+    /// Send a datagram from this already-bound Art-Net port.
+    ///
+    /// ArtPoll is normally transmitted from UDP port 6454 so that replies are
+    /// unicast back to the same port. Using the listener socket also means
+    /// discovery and receiving share a single local port.
+    bool send_to(const std::vector<std::uint8_t>& packet, const std::vector<std::string>& destinations, std::uint16_t port, std::string& error)
+    {
+        error.clear();
+        std::lock_guard<std::mutex> lock(m_send_mutex);
+        if (m_fd < 0) {
+            error = "UDP listener is not running";
+            return false;
+        }
+
+        std::string first_error;
+        bool sent = false;
+        for (const auto& address : destinations) {
+            sockaddr_in destination{};
+            destination.sin_family = AF_INET;
+            destination.sin_port = htons(port);
+            if (::inet_pton(AF_INET, address.c_str(), &destination.sin_addr) != 1)
+                continue;
+
+            ssize_t result = -1;
+            do {
+                result = ::sendto(m_fd, packet.data(), packet.size(), 0, reinterpret_cast<const sockaddr*>(&destination), sizeof(destination));
+            } while (result < 0 && errno == EINTR);
+
+            if (result >= 0 && static_cast<std::size_t>(result) == packet.size()) {
+                sent = true;
+            }
+            else if (first_error.empty()) {
+                first_error = std::strerror(errno);
+            }
+        }
+
+        if (!sent) {
+            error = first_error.empty() ? "no valid discovery destination was found" : "UDP send failed: " + first_error;
+            return false;
+        }
+        return true;
     }
 
     bool empty()
@@ -407,21 +470,48 @@ class ReceiverPortListener
 
                 m_datagrams.fetch_add(1);
 
-                ArtDmxPacket packet;
-                if (decode_artdmx(buffer, static_cast<std::size_t>(received), packet) != DecodeError::none) {
+                if (received < 10 || std::memcmp(buffer, kArtNetId.data(), kArtNetId.size()) != 0) {
                     m_malformed.fetch_add(1);
                     continue;
                 }
 
-                std::vector<std::shared_ptr<ReceiverSubscription>> subscriptions;
-                {
-                    std::lock_guard<std::mutex> lock(m_subscriptions_mutex);
-                    subscriptions = m_subscriptions;
-                }
+                const std::uint16_t opcode = static_cast<std::uint16_t>(buffer[8]) | (static_cast<std::uint16_t>(buffer[9]) << 8);
 
-                for (const auto& subscription : subscriptions) {
-                    if (subscription && subscription->state && subscription->state->accepts(packet.port_address))
-                        subscription->state->apply(packet);
+                if (opcode == kOpDmx) {
+                    ArtDmxPacket packet;
+                    if (decode_artdmx(buffer, static_cast<std::size_t>(received), packet) != DecodeError::none) {
+                        m_malformed.fetch_add(1);
+                        continue;
+                    }
+
+                    std::vector<std::shared_ptr<ReceiverSubscription>> subscriptions;
+                    {
+                        std::lock_guard<std::mutex> lock(m_subscriptions_mutex);
+                        subscriptions = m_subscriptions;
+                    }
+
+                    for (const auto& subscription : subscriptions) {
+                        if (subscription && subscription->state && subscription->state->accepts(packet.port_address))
+                            subscription->state->apply(packet);
+                    }
+                }
+                else if (opcode == kOpPoll) {
+                    PollHandler handler;
+                    {
+                        std::lock_guard<std::mutex> lock(m_handler_mutex);
+                        handler = m_poll_handler;
+                    }
+                    if (handler && source.ss_family == AF_INET)
+                        handler(buffer, static_cast<std::size_t>(received), *reinterpret_cast<const sockaddr_in*>(&source));
+                }
+                else if (opcode == kOpPollReply) {
+                    PollReplyHandler handler;
+                    {
+                        std::lock_guard<std::mutex> lock(m_handler_mutex);
+                        handler = m_poll_reply_handler;
+                    }
+                    if (handler && source.ss_family == AF_INET)
+                        handler(buffer, static_cast<std::size_t>(received), *reinterpret_cast<const sockaddr_in*>(&source));
                 }
             }
         }
@@ -433,19 +523,23 @@ class ReceiverPortListener
     std::thread m_thread;
     std::mutex m_subscriptions_mutex;
     std::vector<std::shared_ptr<ReceiverSubscription>> m_subscriptions;
+    std::mutex m_handler_mutex;
+    PollHandler m_poll_handler;
+    PollReplyHandler m_poll_reply_handler;
+    std::mutex m_send_mutex;
     std::atomic<std::uint64_t> m_datagrams{0};
     std::atomic<std::uint64_t> m_malformed{0};
 };
 
-/// Registry of UDP listeners, keyed by local port, for this module.
+/// Registry of UDP listeners, keyed by local port.
+///
+/// Instances live in the shared core library so that flux.artnet.send and
+/// flux.artnet.receive share the same listener on port 6454.
 class ReceiverNetworkService
 {
   public:
-    static ReceiverNetworkService& instance()
-    {
-        static ReceiverNetworkService service;
-        return service;
-    }
+    using PollHandler = ReceiverPortListener::PollHandler;
+    using PollReplyHandler = ReceiverPortListener::PollReplyHandler;
 
     std::shared_ptr<ReceiverSubscription> subscribe(std::uint16_t port, std::shared_ptr<ReceiverState> state, std::string& error)
     {
@@ -454,27 +548,49 @@ class ReceiverNetworkService
             error = "receiver state is null";
             return nullptr;
         }
+        return subscribe_impl(port, std::move(state), error);
+    }
 
+    /// Keep a listener alive without routing ArtDmx into a receiver state.
+    /// Used by the discovery service from the sender module.
+    std::shared_ptr<ReceiverSubscription> subscribe_listener(std::uint16_t port, std::string& error)
+    {
+        error.clear();
+        return subscribe_impl(port, nullptr, error);
+    }
+
+    void set_poll_reply_handler(PollReplyHandler handler)
+    {
         std::lock_guard<std::mutex> lock(m_mutex);
+        m_poll_reply_handler = std::move(handler);
+        for (auto& entry : m_listeners)
+            entry.second->set_poll_reply_handler(m_poll_reply_handler);
+    }
 
+    void set_poll_handler(PollHandler handler)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+        m_poll_handler = std::move(handler);
+        for (auto& entry : m_listeners)
+            entry.second->set_poll_handler(m_poll_handler);
+    }
+
+    /// Send an ArtPoll from the shared listener socket on the given port.
+    bool send_on_port(std::uint16_t port, const std::vector<std::uint8_t>& packet, const std::vector<std::string>& destinations, std::string& error)
+    {
         std::shared_ptr<ReceiverPortListener> listener;
-        const auto existing = m_listeners.find(port);
-        if (existing == m_listeners.end()) {
-            listener = std::make_shared<ReceiverPortListener>(port);
-            std::string listener_error;
-            if (!listener->start(listener_error)) {
-                error = listener_error;
-                return nullptr;
-            }
-            m_listeners[port] = listener;
-        }
-        else {
-            listener = existing->second;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            const auto existing = m_listeners.find(port);
+            if (existing != m_listeners.end())
+                listener = existing->second;
         }
 
-        auto subscription = std::make_shared<ReceiverSubscription>(std::move(state), port);
-        listener->add_subscription(subscription);
-        return subscription;
+        if (!listener) {
+            error = "no UDP listener is running on port " + std::to_string(port);
+            return false;
+        }
+        return listener->send_to(packet, destinations, port, error);
     }
 
     void unsubscribe(std::uint16_t port, const std::shared_ptr<ReceiverSubscription>& subscription)
@@ -497,6 +613,22 @@ class ReceiverNetworkService
             listener->stop();
     }
 
+    /// Stop and remove every listener. Used at shared-core shutdown so that
+    /// listener threads are joined before the discovery and advertisement
+    /// services are destroyed.
+    void stop_all()
+    {
+        std::vector<std::shared_ptr<ReceiverPortListener>> listeners;
+        {
+            std::lock_guard<std::mutex> lock(m_mutex);
+            for (auto& entry : m_listeners)
+                listeners.push_back(entry.second);
+            m_listeners.clear();
+        }
+        for (auto& listener : listeners)
+            listener->stop();
+    }
+
     /// Exposed for tests.
     std::size_t listener_count()
     {
@@ -512,6 +644,33 @@ class ReceiverNetworkService
     }
 
   private:
+    std::shared_ptr<ReceiverSubscription> subscribe_impl(std::uint16_t port, std::shared_ptr<ReceiverState> state, std::string& error)
+    {
+        std::lock_guard<std::mutex> lock(m_mutex);
+
+        std::shared_ptr<ReceiverPortListener> listener;
+        const auto existing = m_listeners.find(port);
+        if (existing == m_listeners.end()) {
+            listener = std::make_shared<ReceiverPortListener>(port);
+            listener->set_poll_handler(m_poll_handler);
+            listener->set_poll_reply_handler(m_poll_reply_handler);
+            std::string listener_error;
+            if (!listener->start(listener_error)) {
+                error = listener_error;
+                return nullptr;
+            }
+            m_listeners[port] = listener;
+        }
+        else {
+            listener = existing->second;
+        }
+
+        auto subscription = std::make_shared<ReceiverSubscription>(std::move(state), port);
+        listener->add_subscription(subscription);
+        return subscription;
+    }
+
+  public:
     ReceiverNetworkService() = default;
 
     ~ReceiverNetworkService()
@@ -527,8 +686,11 @@ class ReceiverNetworkService
             listener->stop();
     }
 
+  private:
     std::mutex m_mutex;
     std::map<std::uint16_t, std::shared_ptr<ReceiverPortListener>> m_listeners;
+    PollHandler m_poll_handler;
+    PollReplyHandler m_poll_reply_handler;
 };
 
 } // namespace flux::artnet

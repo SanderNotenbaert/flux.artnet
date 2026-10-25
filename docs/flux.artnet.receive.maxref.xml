@@ -6,8 +6,8 @@
 
 <c74object name='flux.artnet.receive' category='artnet,  dmx,  network'>
 
-	<digest>Receive Art-Net DMX data over UDP</digest>
-	<description>Receive DMX channel values from Art-Net lighting devices and software on the network into Max.</description>
+	<digest>Receive DMX channel values from Art-Net lighting devices and software on the network into Max</digest>
+	<description>Receive DMX channel values from Art-Net lighting devices and software on the network into Max. </description>
 
 
 	<!--METADATA-->
@@ -31,14 +31,14 @@
 
 	<methodlist>
 
+		<method name='blackout'>
+			<digest>blackout 1 outputs zeros on every outlet while received data continues to be tracked; blackout 0 restores the latest frames</digest>
+			<description>blackout 1 outputs zeros on every outlet while received data continues to be tracked; blackout 0 restores the latest frames. </description>
+		</method>
+
 		<method name='bang'>
 			<digest>Output the current frame for every configured universe immediately</digest>
 			<description>Output the current frame for every configured universe immediately. During blackout, bang outputs zeros. </description>
-		</method>
-
-		<method name='blackout'>
-			<digest>Temporarily black out the outlets</digest>
-			<description>blackout 1 immediately outputs zeros on every outlet. The receiver keeps listening and tracking incoming data, but suppresses live output. In fixed-rate mode it outputs zeros at @framerate; in change mode it outputs zeros once and bang outputs zeros. blackout 0 immediately outputs the latest stored frames and resumes normal output.</description>
 		</method>
 
 	</methodlist>
