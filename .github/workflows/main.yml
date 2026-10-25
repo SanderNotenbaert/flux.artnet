@@ -53,7 +53,7 @@ jobs:
           else
             ZIP_NAME="flux.artnet-manual-macos-universal.zip"
           fi
-          ditto -c -k --sequesterRsrc --keepParent flux.artnet "$ZIP_NAME"
+          zip -r -X "$ZIP_NAME" flux.artnet
           echo "ZIP_NAME=$ZIP_NAME" >> "$GITHUB_ENV"
 
       - name: Upload build artifact
