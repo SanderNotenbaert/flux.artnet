@@ -28,7 +28,7 @@ using namespace flux::artnet;
 
 class artnet_send : public object<artnet_send> {
   public:
-    MIN_DESCRIPTION	{"Send Art-Net DMX data over UDP. Integer atoms are raw DMX values 0-255; float atoms are normalized 0.0-1.0, clipped and rounded. Lists longer than the remaining configured universes are truncated with a warning."};
+    MIN_DESCRIPTION	{"Send DMX channel values from Max to Art-Net lighting devices and software over the network."};
     MIN_TAGS		{"artnet, dmx, network"};
     MIN_AUTHOR		{"Sander Notenbaert"};
     MIN_RELATED		{"udpsend, flux.artnet.receive"};

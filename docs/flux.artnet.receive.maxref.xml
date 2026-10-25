@@ -7,7 +7,7 @@
 <c74object name='flux.artnet.receive' category='artnet,  dmx,  network'>
 
 	<digest>Receive Art-Net DMX data over UDP</digest>
-	<description>Receive Art-Net DMX data over UDP. Outlet i corresponds to <at>universes[i]</at> and emits 512 integers 0-255, or normalized floats 0.0-1.0 with <at>floatoutput</at> 1. </description>
+	<description>Receive DMX channel values from Art-Net lighting devices and software on the network into Max.</description>
 
 
 	<!--METADATA-->

@@ -32,7 +32,7 @@ namespace max = c74::max;
 
 class artnet_receive : public object<artnet_receive> {
   public:
-    MIN_DESCRIPTION	{"Receive Art-Net DMX data over UDP. Outlet i corresponds to @universes[i] and emits 512 integers 0-255, or normalized floats 0.0-1.0 with @floatoutput 1."};
+    MIN_DESCRIPTION	{"Receive DMX channel values from Art-Net lighting devices and software on the network into Max."};
     MIN_TAGS		{"artnet, dmx, network"};
     MIN_AUTHOR		{"Sander Notenbaert"};
     MIN_RELATED		{"udpreceive, flux.artnet.send"};
