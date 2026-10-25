@@ -1,24 +1,20 @@
 {
-	"author" : "Cycling '74",
-	"description" : "Lightweight reference implementation of a package built using the Min-API.",
+	"author" : "Sander Notenbaert",
+	"description" : "Send and receive Art-Net DMX data over UDP in Max.",
 	"homepatcher" : "",
-	"max_version_min" : "8.0", "max_version_max" : "none",
-	"name" : "Min Package Template",
+	"max_version_min" : "8.2", "max_version_max" : "none",
+	"name" : "flux.artnet",
 	"os" : {
 		"macintosh" : {
-			"platform" : [ "x64" ],
-			"min_version" : "none"
-		},
-		"windows" : {
-			"platform" : [ "x64" ],
-			"min_version" : "none"
+			"platform" : [ "x64", "arm64" ],
+			"min_version" : "10.13.x"
 		}
 	},
 	"package_extra" : {
-		"reverse_domain" : "com.cycling74",
-		"copyright" : "Copyright (c) 2018 Cycling '74"
+		"reverse_domain" : "com.sandernotenbaert",
+		"copyright" : "Copyright (c) 2026 Sander Notenbaert"
 	},
-	"tags" : [ ],
+	"tags" : [ "artnet", "dmx", "network" ],
 	"version" : "0.1.0",
-	"website" : "http://www.github.com/Cycling74/min-devkit"
+	"website" : "https://github.com/SanderNotenbaert/flux.artnet"
 }

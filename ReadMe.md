@@ -1,97 +1,338 @@
-# min-package-template
+# flux.artnet
 
-Minimal template for creating a package with the min-api.
+A native Max package for sending and receiving [Art-Net](https://art-net.org.uk/) (DMX over Ethernet) using the [Min-API](https://cycling74.github.io/min-devkit/).
 
-## Structure
+The package provides two externals:
 
-* `min-package-template` is a minimal template version of the Min-DevKit package to get started following current best-practices for package creation.
-* `min-api` is a folder within the devkit containing all of the support files you will need to compile an external object written in modern C++.  This folder you will include in your own package's source folder.
-* `min-lib` contains building blocks, helper classes, and unit generators that may be useful in authoring  C++ code for audio, video, and data processing.
+* **`flux.artnet.send`** — send DMX channel values as Art-Net `ArtDmx` packets over UDP.
+* **`flux.artnet.receive`** — receive Art-Net `ArtDmx` packets and output their DMX channel values.
+
+Both objects use the fixed Art-Net UDP port `6454`. Networking is implemented with native BSD UDP sockets and a shared network service, so multiple sender and receiver objects can coexist safely.
 
 
-## Prerequisites
+## Requirements
 
-To build externals, you will need some form of compiler support on your system. 
+* macOS 10.13 or newer
+* Max 8.2 or newer
+* Xcode 10 or newer
+* [CMake](https://cmake.org/download/) 3.19 or newer
 
-* On the Mac this means **Xcode 10 or higher** (you can get from the App Store for free). 
-* On Windows this means **Visual Studio 2017 or 2019**  (you can download a free version from Microsoft). The installer for Visual Studio 2017 offers an option to install Git, which you should choose to do.
+The macOS build produces a universal binary containing both `arm64` (Apple Silicon) and `x86_64` (Intel) code, so the same `.mxo` runs natively on either architecture.
 
-You will also need to install a recent version of [CMake](https://cmake.org/download/) (version 3.19 or higher).
+This release targets macOS only. Windows support is not implemented.
 
 
 ## Building
 
-0. Select "Use this template" and set up your own repository.
-1. Clone your new repository. **You should clone it into Max's Packages folder**. If you clone it elsewhere you will need to make an alias to it in your Packages folder.
-   The *Packages* folder can be found inside of your *Max 8* folder which is inside of your user's *Documents* folder.
-   Make sure you clone recursively so that all sub-modules are properly initiated : `git clone <your repository> --recursive`
-2. In the Terminal or Console app of your choice, change directories (cd) into the min-starter folder you cloned/installed in step 0.
-3. `mkdir build` to create a folder with your various build files
-4. `cd build` to put yourself into that folder
-5. Now you can generate the projects for your choosen build environment:
+Clone the repository recursively so that the `min-api` and `min-lib` submodules are initialized:
 
-### Mac 
+```sh
+git clone --recursive https://github.com/SanderNotenbaert/flux.artnet.git
+```
 
-Run `cmake -G Xcode ..`
+Then configure and build:
 
-Next run `cmake --build .` or open the Xcode project from this "build" folder and use the GUI.
+```sh
+cd flux.artnet
+mkdir build
+cd build
+cmake -G Xcode ..
+cmake --build . --config Release
+```
 
-Note: you can add the `-j4` option where "4" is the number of cores to use.  This can help to speed up your builds, though sometimes the error output is interleaved in such a way as to make troubleshooting more difficult.
+The externals are written to the package's `externals` folder. The package can be installed by placing (or aliasing) this folder in `~/Documents/Max 9/Packages`.
 
-### Windows
+If Max is already running while you rebuild, restart Max (or at least reopen the patch) so that it loads the new `.mxo` binaries instead of its cached copies. When the externals load, the Max console prints the loaded version, for example `flux.artnet.send 0.1.0`.
 
-You can run `cmake --help` to get a list of the options available.  Assuming some version of Visual Studio 2019, the commands to generate the projects will look like this: 
+To build for a single architecture instead of a universal binary:
 
-`cmake -G "Visual Studio 16 2019" ..`
-
-Or using Visual Studio 2017 it will look like this:
-
-`cmake -G "Visual Studio 15 2017 Win64" ..`
-
-Having generated the projects, you can now build by opening the .sln file in the build folder with the Visual Studio app (just double-click the .sln file) or you can build on the command line like this:
-
-`cmake --build . --config Release`
+```sh
+cmake -G Xcode -DCMAKE_OSX_ARCHITECTURES=arm64 ..
+```
 
 
+## Terminology
 
-## Unit Testing
+The three addressing concepts are deliberately kept distinct:
 
-On the command line you can run all unit tests using Cmake:
+* **Port-Address** — the 15-bit Art-Net address carried in an `ArtDmx` packet, from `0` to `32767`. It is composed of a 7-bit Net, 4-bit Sub-Net and 4-bit Universe.
+* **Universe index** — a zero-based position in the ordered `@universes` list. The Max message API always uses this index, never the raw Port-Address.
+* **Channel offset** — a zero-based channel position from `0` to `511` inside a 512-channel DMX frame.
 
-* on debug builds: `ctest -C Debug .`
-* on release builds: `ctest -C Release .`
+For example, `@universes 1 2 4` configures three Port-Addresses:
 
-Or you can run an individual test, which is simply a command line program:
+| Universe index | Port-Address |
+|---|---|
+| 0 | 1 |
+| 1 | 2 |
+| 2 | 4 |
 
-* `cd ..`
-* `cd tests`
-* mac example: `./test_dcblocker_tilde -s`
-* win example: `test_dcblocker_tilde.exe -s`
+`@universes` accepts either separate integers (`@universes 1 2 4`) or a single space- or comma-separated value (`@universes "1 2 4"`) when editing through a text field.
 
-Or you can run them with your IDE's debugger by selecting the "RUN_TESTS" target.
+`universe 1 255` therefore writes channel 0 of the second entry (Port-Address 2), not Port-Address 1.
 
-
-## Continuous Integration
-
-Continuous Integration (CI) is a process by which each code check-in is verified by an automated build and automated tests to allow developers to detect problems early and distribute software easily.
-
-The min-starter project models CI using [Github Actions](https://docs.github.com/en/actions).
+Every configured universe owns an independent 512-byte frame buffer, initially all zeroes.
 
 
-## Additional Documentation
+## `flux.artnet.send`
 
-* [Min Documentation Hub](http://cycling74.github.io/min-devkit/) For guides, references, and resources
-* [Min Wiki](https://github.com/Cycling74/min-devkit/wiki) For additional topics, advanced configuration, and user submissions
-* [How to Create a New Object](./HowTo-NewObject.md)
-* [How to Update the underlying Max API](./HowTo-UpdateTheAPI.md)
+### Attributes
+
+| Attribute | Default | Description |
+|---|---|---|
+| `@universes` | `0` | Ordered list of zero-based Port-Addresses (0–32767). May be changed at runtime. |
+| `@host` | unset | Unicast destination IP address or hostname. Empty means broadcast. |
+| `@framerate` | `0` | Frames per second. `0` means change-triggered transmission. |
+| `@quiet` | `0` | When `1`, suppress error messages in the Max console. |
+
+`@framerate` is accepted in the range 0–1000 frames per second. Art-Net itself is intended for DMX rates of up to about 44 Hz; higher values are supported for testing but should not be used on a production lighting network.
+
+### Destination behaviour
+
+* With no `@host`, the sender broadcasts to the directed broadcast address of every active IPv4 interface. If no usable broadcast address can be determined, it falls back to the limited broadcast address `255.255.255.255`.
+* With `@host` set, the sender unicasts to that host. IP addresses and hostnames are supported.
+* Clear the host with `@host ""` to return to broadcast mode.
+* No ArtPoll discovery is required to send to a known host.
+
+For local loopback testing, use `@host 127.0.0.1`.
+
+### Message forms
+
+All channel values are zero-based and must be integers in `0`–`255`.
+
+| Message | Meaning |
+|---|---|
+| `1 2 3` | Write from channel offset 0 of universe index 0. |
+| `channel 510 1 2` | Write from channel offset 510 of universe index 0. |
+| `universe 1 1 2` | Write from offset 0 of universe index 1. |
+| `universe 1 channel 510 1 2` | Write from offset 510 of universe index 1. |
+
+Writes spill into subsequent entries of the `@universes` list in order. For example, with `@universes 1 2`, `channel 510 1 2 3 4` writes channels 510 and 511 of Port-Address 1 and channels 0 and 1 of Port-Address 2.
+
+Each message is a **partial** update. Channels not mentioned retain their previous values.
+
+Channel values may be either integers in `0`–`255` or normalized floats in `0.0`–`1.0`. Floats are clipped to `0.0`–`1.0`, multiplied by 255 and rounded to the nearest integer DMX step. Integer and float values may be mixed in one list. For example, `0.0 0.5 1.0` and `0 128 255` both produce the same first three DMX values.
+
+Because float atoms are always treated as normalized, `128.0` clips to `1.0` and becomes DMX 255. Use integers when you want raw DMX values.
+
+### Silent updates with `set`
+
+Each form also accepts a `set` prefix:
+
+```
+set 1 2 3
+set channel 510 1 2
+set universe 1 1 2
+set universe 1 channel 510 1 2
+```
+
+A `set` message updates the stored frame without transmitting immediately.
+
+* At `@framerate 0`, the next ordinary message that changes at least one channel also flushes any pending `set` changes. `bang` always flushes everything.
+* At `@framerate N` (N > 0), the next scheduled tick sends the latest state.
+* `set` never pauses or disables scheduled transmission.
+
+### `bang`
+
+`bang` immediately sends the current full frame for every configured universe, regardless of `@framerate`. It does not change the configured rate or clear stored channel values.
+
+### Transmission modes
+
+**Change-triggered (`@framerate 0`)**
+
+* Transmits when an ordinary message changes at least one channel value.
+* Suppresses transmission when an update leaves every value unchanged.
+* `set` updates do not transmit by themselves.
+* Every transmission contains the complete 512-channel frame for each affected universe.
+* `bang` sends all configured universes.
+
+**Scheduled (`@framerate N`, N > 0)**
+
+* Sends every configured universe at the requested rate, including when the data has not changed.
+* Coalesces intermediate updates: each tick sends the latest buffer state.
+* `bang` sends all universes immediately in addition to scheduled transmission.
+* The timer is one-shot and re-armed from its callback, so callbacks cannot overlap.
+
+### Validation
+
+An update is validated before any buffer is modified:
+
+* Channel offset must be `0`–`511`.
+* Universe index must refer to an entry in `@universes`.
+* Channel values must be integers in `0`–`255`, or normalized floats clipped to `0.0`–`1.0` and rounded to the nearest DMX step. Non-finite floats are rejected.
+* At least one channel value is required.
+* If the update is longer than the remaining configured universes, the values that fit are applied and the rest are dropped. A warning is sent to the right outlet and printed to the console unless `@quiet 1`.
+* Validation errors leave all buffers unchanged and are reported to the right outlet; `@quiet 1` suppresses only the console copy.
+
+`@universes` must contain at least one entry, only valid Port-Addresses, and no duplicates.
+
+### Sender outlets
+
+`flux.artnet.send` has two outlets:
+
+* **Left outlet (`bang`)** — emits a bang after every universe frame is successfully transmitted. Sending a frame that spills over three universes produces three bangs.
+* **Right outlet (`error <message>` / `warning <message>`)** — reports invalid input, invalid attribute values, network failures and truncated updates.
+
+Errors and warnings are always sent to the right outlet. `@quiet 0` (the default) also prints them to the Max console; `@quiet 1` suppresses the console output only.
+
+### Protocol details
+
+The sender emits standard Art-Net 4 `ArtDmx` packets:
+
+* identifier `Art-Net\0`
+* opcode `0x5000` (little-endian)
+* `ProtVer` 14 (big-endian)
+* per-universe sequence numbers 1–255 (wrapping; 0 is never emitted)
+* full 512-channel payload
+
+The sequence number is maintained independently for each configured universe.
 
 
+## `flux.artnet.receive`
 
-## Contributors / Acknowledgements
+### Attributes
 
-* See the [GitHub Contributor Graph](https://github.com/Cycling74/min-api/graphs/contributors) for the API
+| Attribute | Default | Description |
+|---|---|---|
+| `@universes` | `0` | Ordered list of Port-Addresses to receive (0–32767). Creation-time only. |
+| `@framerate` | `0` | Output frame rate. `0` emits on change; a positive value emits at a fixed rate (0–1000). |
+| `@floatoutput` | `0` | When `1`, outlets emit normalized floats `0.0`–`1.0` instead of integers `0`–`255`. |
+| `@quiet` | `0` | When `1`, suppress error messages in the Max console. |
 
-## Support
+`@quiet 0` (the default) reports invalid attribute values and UDP listener bind failures to the Max console. `@quiet 1` suppresses those console messages; normal output is unchanged.
 
-For support, please use the developer forums at:
-http://cycling74.com/forums/
+### Outlets
+
+One outlet is created for each entry in `@universes`, in list order. The first outlet (leftmost) corresponds to universe index 0.
+
+Each outlet emits a plain list of exactly 512 integer values by default. With `@floatoutput 1`, it emits 512 normalized floats instead (`0.0`–`1.0`). The universe number is **not** prepended either way.
+
+### Receiving behaviour
+
+* Only packets whose Port-Address is in `@universes` are processed.
+* Packets for other Port-Addresses are ignored.
+* Each configured universe keeps an independent 512-channel frame.
+* Incoming channel data is compared with the stored frame. Identical frames do not change the stored state and do not trigger output in change mode.
+* Malformed or unrelated UDP datagrams are ignored safely.
+* Receivers for the same local port share a single UDP socket inside the package, so multiple receiver objects can listen on port 6454 at the same time.
+
+### Short payloads
+
+Art-Net `ArtDmx` payloads may contain fewer than 512 channels. This implementation validates that the payload length is even and between 2 and 512 bytes, then updates only the channels present in the packet. All remaining channels retain their previous stored values. This is documented behaviour, not an accident of the implementation.
+
+### Output rate
+
+`@framerate 0` is **change mode**:
+
+* Emits a 512-value list when the stored channel data changes.
+* Never emits merely because a packet arrived with identical data.
+* `bang` emits every current frame immediately, including universes that have not received a packet yet (zero frames).
+* Received packets are polled on Max's main thread at 100 Hz, so output coalesces bursts and never blocks the UDP receive loop.
+
+`@framerate N` where N > 0 is **rate mode**:
+
+* The UDP receive loop runs independently of Max output.
+* Emits the latest stored frame for every configured universe at the configured rate.
+* Intermediate packets coalesce into the latest state; no backlog is built.
+* `bang` emits all current frames immediately without changing the configured rate.
+
+### Dynamic configuration
+
+`@universes` is a **creation-time** attribute for `flux.artnet.receive`, because changing the number of outlets of a live Max object is not reliable. Attempts to change it at runtime are rejected and reported to the console unless `@quiet 1` is set.
+
+Create a new object to use a different set of universes. `@framerate`, `@floatoutput` and `@quiet` can be changed at runtime.
+
+A maximum of 64 universes per receiver object is supported to keep the number of outlets and output work bounded.
+
+### Sequence handling
+
+Sequence number 0 means sequence numbering is disabled and is accepted. Non-zero sequences are tracked per universe for diagnostics, including duplicates and gaps, but packets are **not** rejected based on sequence number. This keeps interoperability with senders that restart, wrap around, or do not use sequence numbering.
+
+
+## Protocol library
+
+The Art-Net encoder, decoder, Port-Address helpers, frame state, and UDP services are deliberately separated from the Max object classes:
+
+* `source/artnet/artnet_protocol.hpp` — Port-Address helpers, `ArtDmx` encode/decode, sequence tracking.
+* `source/artnet/dmx_frame.hpp` — the 512-channel frame type.
+* `source/artnet/sender_engine.hpp` — sender frame ownership, validation, coalescing and transmission policy.
+* `source/artnet/receiver_state.hpp` — thread-safe receive buffers and routing state.
+* `source/artnet/network_service.hpp` — shared UDP sender socket and per-port receive listeners.
+
+This keeps protocol behaviour testable without Max or real sockets.
+
+Because Max loads each external as a separate module, a "shared service" means shared among all instances of that external. All `flux.artnet.receive` objects in a patch share one UDP listener per port; all `flux.artnet.send` objects share one outbound UDP socket. The sender and receiver modules do not need to share runtime state with each other.
+
+
+## Unit tests
+
+```sh
+cd build
+ctest -C Release . --output-on-failure
+```
+
+The suite covers Port-Address boundaries, packet encoding/decoding, malformed packets, sequence handling, sender validation and spill-over, silent updates, change suppression, receiver routing, short payloads, outlet ordering, rate mode, and real UDP loopback between the sender and receiver services.
+
+
+## Releasing
+
+The GitHub Actions release workflow builds and tests the universal package, then publishes a ready-to-use zip when a version tag is pushed:
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+The tag must match the `version` value in `package-info.json` (without the leading `v`). The release artifact is named like `flux.artnet-v0.1.0-macos-universal.zip` and contains a single `flux.artnet` folder with:
+
+```
+externals/
+help/
+docs/
+package-info.json
+License.md
+ReadMe.md
+```
+
+Unzip that folder into `~/Documents/Max 9/Packages`. Running the Release workflow manually builds and uploads the same zip as a workflow artifact without creating a GitHub Release.
+
+
+## Manual interoperability check
+
+The automated tests verify the package against itself over a real UDP loopback. For a final hardware check, patch `flux.artnet.send @host <node-ip>` to an Art-Net node and verify that it responds to a known universe and channel. Any Art-Net 3 or Art-Net 4 implementation that supports standard `ArtDmx` packets should interoperate.
+
+The repository also includes an independent Python probe for manual checks:
+
+```sh
+# Receive packets sent by Max
+python3 tools/artnet_probe.py receive --udp-port 6454 --port-address 0 --show 16
+
+# Send a packet to a Max receiver
+python3 tools/artnet_probe.py send --host 127.0.0.1 --port-address 0 --values 1,2,3,4
+```
+
+It uses only the Python standard library and is intentionally independent of the C++ implementation.
+
+Common check points:
+
+* The node's Port-Address must match the configured `@universes` value.
+* DMX channels in Max are zero-based; most lighting consoles are one-based. Channel offset 0 corresponds to DMX channel 1.
+* Broadcast may not reach a node on a different subnet or VLAN; use unicast `@host` in that case.
+
+
+## Package layout
+
+```
+source/projects/flux.artnet.send      sender object and tests
+source/projects/flux.artnet.receive   receiver object and tests
+source/artnet                         shared protocol and networking library
+help                                  help patchers
+examples                              focused example patchers
+docs                                  Max reference pages
+tools                                 independent Python Art-Net probe
+```
+
+
+## License
+
+MIT. See [License.md](License.md).
